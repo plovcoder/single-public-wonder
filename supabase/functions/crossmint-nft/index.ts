@@ -16,6 +16,13 @@ serve(async (req) => {
   try {
     const { recipient, apiKey, templateId, blockchain } = await req.json();
     
+    console.log("Request parameters received:", { 
+      recipient, 
+      templateId, 
+      blockchain,
+      apiKeyProvided: !!apiKey 
+    });
+    
     if (!recipient || !apiKey || !templateId || !blockchain) {
       return new Response(
         JSON.stringify({ error: "Missing required parameters" }),
@@ -35,7 +42,10 @@ serve(async (req) => {
     const recipientFormat = recipient.includes("@") 
       ? `email:${recipient}:${blockchain}` 
       : `${recipient}:${blockchain}`;
+      
+    console.log(`Formatted recipient for ${blockchain}: ${recipientFormat}`);
 
+    console.log(`Making request to Crossmint API for blockchain: ${blockchain}`);
     const response = await fetch(
       "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts",
       {
@@ -53,9 +63,12 @@ serve(async (req) => {
     );
 
     const data = await response.json();
+    console.log("Crossmint API response:", data);
     
     // Update the mint record in the database
     if (response.ok) {
+      console.log(`Minting successful for ${recipient} on ${blockchain}`);
+      
       // Find and update the mint record
       const { error } = await supabase
         .from("nft_mints")
@@ -71,13 +84,23 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, data }),
+        JSON.stringify({ 
+          success: true, 
+          data,
+          mintingDetails: {
+            blockchain,
+            recipientFormat,
+            timestamp: new Date().toISOString()
+          }
+        }),
         { 
           status: 200, 
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       );
     } else {
+      console.error(`Minting failed for ${recipient} on ${blockchain}. Error:`, data);
+      
       // Update record as failed
       const { error } = await supabase
         .from("nft_mints")
@@ -94,7 +117,15 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: false, error: data }),
+        JSON.stringify({ 
+          success: false, 
+          error: data,
+          mintingDetails: {
+            blockchain,
+            recipientFormat,
+            timestamp: new Date().toISOString()
+          }
+        }),
         { 
           status: response.status, 
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
