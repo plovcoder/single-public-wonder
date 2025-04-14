@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
@@ -56,7 +55,7 @@ serve(async (req) => {
     
     console.log(`[Edge Function] Using formatted recipient: ${formattedRecipient}`);
     
-    // Use the provided collectionId for the endpoint URL
+    // SIEMPRE usa el endpoint de staging para asegurarnos
     const crossmintEndpoint = `https://staging.crossmint.com/api/2022-06-09/collections/${collectionId}/nfts`;
     
     console.log(`[Edge Function] Using endpoint: ${crossmintEndpoint}`);
