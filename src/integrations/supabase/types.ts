@@ -96,6 +96,7 @@ export type Database = {
       nft_config: {
         Row: {
           api_key: string
+          blockchain: string | null
           created_at: string | null
           id: string
           template_id: string
@@ -103,6 +104,7 @@ export type Database = {
         }
         Insert: {
           api_key: string
+          blockchain?: string | null
           created_at?: string | null
           id?: string
           template_id: string
@@ -110,6 +112,7 @@ export type Database = {
         }
         Update: {
           api_key?: string
+          blockchain?: string | null
           created_at?: string | null
           id?: string
           template_id?: string
