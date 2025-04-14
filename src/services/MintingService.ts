@@ -6,7 +6,7 @@ export interface MintingProject {
   id?: string;
   apiKey: string;
   templateId: string;
-  collectionId?: string;
+  collectionId: string;
   blockchain: string;
 }
 
@@ -20,7 +20,7 @@ export class MintingService {
       console.log(`[MintingService] Starting minting for recipient: ${record.recipient}`);
       console.log(`[MintingService] Using config:`, {
         templateId: project.templateId,
-        collectionId: project.collectionId || "Using templateId as collectionId",
+        collectionId: project.collectionId,
         blockchain: project.blockchain,
         apiKeyProvided: !!project.apiKey,
         supabaseConfig: {
@@ -30,8 +30,8 @@ export class MintingService {
       });
       
       // Verify project configuration
-      if (!project.apiKey || !project.templateId) {
-        const error = "Missing API key or template ID";
+      if (!project.apiKey || !project.collectionId) {
+        const error = "Missing API key or collection ID";
         console.error(`[MintingService] Error: ${error}`);
         updateRecordStatus(record.id || '', 'failed', error);
         return { recipient: record.recipient, success: false, error: { message: error } };

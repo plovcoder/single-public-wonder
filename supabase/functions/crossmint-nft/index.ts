@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
@@ -24,10 +23,10 @@ serve(async (req) => {
       apiKeyProvided: !!apiKey
     });
     
-    if (!recipient || !apiKey || (!templateId && !collectionId)) {
+    if (!recipient || !apiKey || !collectionId) {
       console.error("[Edge Function] Missing required parameters");
       return new Response(
-        JSON.stringify({ error: "Missing required parameters. Need recipient, apiKey, and either templateId or collectionId" }),
+        JSON.stringify({ error: "Missing required parameters. Need recipient, apiKey, and collectionId" }),
         { 
           status: 400, 
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
@@ -38,18 +37,15 @@ serve(async (req) => {
     // Format the recipient address - could be email or wallet address
     let formattedRecipient;
     
-    // Use the blockchain provided in the request instead of hardcoding "chiliz"
-    const chainForFormatting = blockchain || "chiliz";
-    
     // Handle wallet addresses (starting with 0x)
     if (recipient.startsWith('0x')) {
-      formattedRecipient = `${chainForFormatting}:${recipient}`;
-      console.log(`[Edge Function] Formatted wallet address using blockchain ${chainForFormatting}`);
+      formattedRecipient = `${blockchain}:${recipient}`;
+      console.log(`[Edge Function] Formatted wallet address using blockchain ${blockchain}`);
     } 
     // Handle email recipients
     else if (recipient.includes('@')) {
-      formattedRecipient = `email:${recipient}:${chainForFormatting}`;
-      console.log(`[Edge Function] Formatted email using blockchain ${chainForFormatting}`);
+      formattedRecipient = `email:${recipient}:${blockchain}`;
+      console.log(`[Edge Function] Formatted email using blockchain ${blockchain}`);
     }
     // Otherwise use as is (might already be formatted)
     else {
@@ -59,9 +55,8 @@ serve(async (req) => {
     
     console.log(`[Edge Function] Using formatted recipient: ${formattedRecipient}`);
     
-    // Use collectionId if provided, otherwise use templateId as the collection ID
-    const effectiveCollectionId = collectionId || templateId;
-    const crossmintEndpoint = `https://staging.crossmint.com/api/2022-06-09/collections/${effectiveCollectionId}/nfts`;
+    // Use the provided collectionId for the endpoint URL
+    const crossmintEndpoint = `https://staging.crossmint.com/api/2022-06-09/collections/${collectionId}/nfts`;
     
     console.log(`[Edge Function] Using endpoint: ${crossmintEndpoint}`);
     
@@ -70,10 +65,10 @@ serve(async (req) => {
       recipient: formattedRecipient,
     };
     
-    // Only include templateId in the payload if it's provided and different from collectionId
-    if (templateId && templateId !== effectiveCollectionId) {
+    // Only include templateId if it's provided
+    if (templateId) {
       mintPayload.templateId = templateId;
-      console.log(`[Edge Function] Including separate templateId in payload: ${templateId}`);
+      console.log(`[Edge Function] Including templateId in payload: ${templateId}`);
     }
     
     console.log(`[Edge Function] Sending request to Crossmint:`, mintPayload);
