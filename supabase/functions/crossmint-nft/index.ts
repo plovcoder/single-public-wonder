@@ -83,6 +83,7 @@ serve(async (req) => {
     console.log("[Edge Function] Supabase client created successfully");
 
     // Format recipient according to Crossmint requirements - SIMPLIFIED VERSION
+    // IMPORTANT: Only format email addresses, leave wallet addresses as-is
     let recipientFormat;
     
     // Basic check if it's an email or wallet
