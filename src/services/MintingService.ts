@@ -1,4 +1,3 @@
-
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
@@ -7,6 +6,7 @@ export interface MintingProject {
   id?: string;
   apiKey: string;
   templateId: string;
+  collectionId?: string;
   blockchain: string;
 }
 
@@ -20,6 +20,7 @@ export class MintingService {
       console.log(`[MintingService] Starting minting for recipient: ${record.recipient}`);
       console.log(`[MintingService] Using config:`, {
         templateId: project.templateId,
+        collectionId: project.collectionId || "Using templateId as collectionId",
         blockchain: project.blockchain,
         apiKeyProvided: !!project.apiKey,
         supabaseConfig: {
@@ -41,12 +42,10 @@ export class MintingService {
       console.log(`[MintingService] Request payload:`, {
         recipient: record.recipient,
         templateId: project.templateId,
+        collectionId: project.collectionId,
         blockchain: project.blockchain,
         apiKeyProvided: !!project.apiKey,
       });
-      
-      // IMPORTANT: Pass the recipient exactly as it is, no modifications
-      // Edge function will handle the appropriate formatting
       
       // Make the request to the edge function
       console.log(`[MintingService] Sending request to edge function now...`);
@@ -54,9 +53,10 @@ export class MintingService {
         'crossmint-nft',
         {
           body: {
-            recipient: record.recipient, // Pass recipient AS-IS, no modifications
+            recipient: record.recipient,
             apiKey: project.apiKey,
             templateId: project.templateId,
+            collectionId: project.collectionId,
             blockchain: project.blockchain
           }
         }

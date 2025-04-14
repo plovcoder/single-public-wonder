@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
@@ -13,19 +14,20 @@ serve(async (req) => {
 
   try {
     const requestBody = await req.json();
-    const { recipient, apiKey, templateId, blockchain } = requestBody;
+    const { recipient, apiKey, templateId, collectionId, blockchain } = requestBody;
     
     console.log("[Edge Function] Request received:", {
       recipient,
       templateId,
+      collectionId,
       blockchain,
       apiKeyProvided: !!apiKey
     });
     
-    if (!recipient || !apiKey || !templateId) {
+    if (!recipient || !apiKey || (!templateId && !collectionId)) {
       console.error("[Edge Function] Missing required parameters");
       return new Response(
-        JSON.stringify({ error: "Missing required parameters" }),
+        JSON.stringify({ error: "Missing required parameters. Need recipient, apiKey, and either templateId or collectionId" }),
         { 
           status: 400, 
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
@@ -57,16 +59,22 @@ serve(async (req) => {
     
     console.log(`[Edge Function] Using formatted recipient: ${formattedRecipient}`);
     
-    // Use the templateId directly as the collection ID
-    const crossmintEndpoint = `https://staging.crossmint.com/api/2022-06-09/collections/${templateId}/nfts`;
+    // Use collectionId if provided, otherwise use templateId as the collection ID
+    const effectiveCollectionId = collectionId || templateId;
+    const crossmintEndpoint = `https://staging.crossmint.com/api/2022-06-09/collections/${effectiveCollectionId}/nfts`;
     
     console.log(`[Edge Function] Using endpoint: ${crossmintEndpoint}`);
     
-    // Include the templateId in the request body
-    const mintPayload = {
+    // Create the mint payload
+    const mintPayload: Record<string, string> = {
       recipient: formattedRecipient,
-      templateId: templateId  // Add templateId to the payload
     };
+    
+    // Only include templateId in the payload if it's provided and different from collectionId
+    if (templateId && templateId !== effectiveCollectionId) {
+      mintPayload.templateId = templateId;
+      console.log(`[Edge Function] Including separate templateId in payload: ${templateId}`);
+    }
     
     console.log(`[Edge Function] Sending request to Crossmint:`, mintPayload);
     

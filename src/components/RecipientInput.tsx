@@ -14,6 +14,7 @@ interface RecipientInputProps {
     id?: string;
     apiKey: string;
     templateId: string;
+    collectionId?: string;
     blockchain: string;
   };
   onRecipientsLoaded: (records: MintingRecord[]) => void;
@@ -46,6 +47,7 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
     
     setIsValidatingTemplate(true);
     try {
+      // Use the templateId to validate the template
       const response = await fetch(
         `https://ikuviazxpqpbomfaucom.supabase.co/functions/v1/validate-template?templateId=${currentProject.templateId}&apiKey=${currentProject.apiKey}`,
         {
@@ -270,6 +272,7 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
             <div className="mt-1">
               <p>🔗 <strong>Template blockchain:</strong> {templateInfo.readableChain || getBlockchainDisplayName(templateInfo.chain)}</p>
               {templateInfo.name && <p>📄 <strong>Template name:</strong> {templateInfo.name}</p>}
+              {templateInfo.id && <p>🆔 <strong>Collection/Template ID:</strong> {templateInfo.id}</p>}
               {templateInfo.compatibleWallets && (
                 <p className="mt-1">💼 <strong>Required wallet format:</strong> {templateInfo.compatibleWallets.walletPrefix}</p>
               )}
