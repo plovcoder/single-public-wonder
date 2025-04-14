@@ -42,12 +42,11 @@ serve(async (req) => {
       timestampUTC: new Date().toISOString()
     });
     
-    if (!recipient || !apiKey || !templateId || !blockchain) {
+    if (!recipient || !apiKey || !templateId) {
       console.error("[Edge Function] Missing required parameters:", { 
         recipientProvided: !!recipient,
         apiKeyProvided: !!apiKey,
-        templateIdProvided: !!templateId,
-        blockchainProvided: !!blockchain
+        templateIdProvided: !!templateId
       });
       
       return new Response(
@@ -83,7 +82,6 @@ serve(async (req) => {
     console.log("[Edge Function] Supabase client created successfully");
 
     // Determine if the recipient is an email or a wallet address
-    // CRITICAL: Only format email addresses, leave wallet addresses COMPLETELY as-is
     let recipientFormat;
     const isEmailRecipient = recipient.includes("@");
     
@@ -97,20 +95,48 @@ serve(async (req) => {
       console.log(`[Edge Function] Using wallet address as-is without modifications: ${recipientFormat}`);
     }
 
-    console.log(`[Edge Function] Making request to Crossmint API for blockchain: ${blockchain}`);
-    console.log(`[Edge Function] Using template ID: ${templateId}`);
-    console.log(`[Edge Function] Final recipient format: ${recipientFormat}`);
-    
     // Use Crossmint staging API
     const crossmintEndpoint = "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts";
     console.log(`[Edge Function] Crossmint endpoint: ${crossmintEndpoint}`);
     
+    // First, validate the template to get the correct blockchain
+    let templateData;
+    try {
+      console.log(`[Edge Function] Validating template ID: ${templateId} before minting`);
+      const templateResponse = await fetch(
+        `https://staging.crossmint.com/api/2022-06-09/collections/${templateId}`,
+        {
+          method: "GET", 
+          headers: {
+            "x-api-key": apiKey,
+            "accept": "application/json",
+          },
+        }
+      );
+      
+      if (templateResponse.ok) {
+        templateData = await templateResponse.json();
+        console.log(`[Edge Function] Template validation successful. Template info:`, {
+          name: templateData.name,
+          chain: templateData.chain,
+          status: templateData.status
+        });
+      } else {
+        console.error(`[Edge Function] Failed to validate template: ${templateId}`, await templateResponse.text());
+      }
+    } catch (e) {
+      console.error(`[Edge Function] Error validating template:`, e);
+    }
+    
     let response;
     try {
-      console.log(`[Edge Function] Sending request to Crossmint with payload:`, {
+      // Prepare the payload for Crossmint
+      const mintPayload = {
         recipient: recipientFormat,
         templateId: templateId
-      });
+      };
+      
+      console.log(`[Edge Function] Sending request to Crossmint with payload:`, mintPayload);
       
       // Send payload to Crossmint API
       response = await fetch(
@@ -122,10 +148,7 @@ serve(async (req) => {
             "content-type": "application/json",
             "accept": "application/json",
           },
-          body: JSON.stringify({
-            recipient: recipientFormat,
-            templateId: templateId
-          }),
+          body: JSON.stringify(mintPayload),
         }
       );
       
@@ -180,7 +203,8 @@ serve(async (req) => {
     
     // Update the mint record in the database
     if (response.ok) {
-      console.log(`[Edge Function] Minting successful for ${recipient} on ${blockchain}`);
+      console.log(`[Edge Function] Minting successful for ${recipient}`);
+      console.log(`[Edge Function] Template info:`, templateData || 'No template data available');
       
       // Find and update the mint record
       try {
@@ -210,7 +234,8 @@ serve(async (req) => {
           mintingDetails: {
             blockchain,
             recipientFormat,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            templateInfo: templateData
           }
         }),
         { 
@@ -220,7 +245,7 @@ serve(async (req) => {
       );
     } else {
       const errorMessage = data.message || (data.error?.message || data.error) || "Unknown error from Crossmint API";
-      console.error(`[Edge Function] Minting failed for ${recipient} on ${blockchain}. Error:`, errorMessage);
+      console.error(`[Edge Function] Minting failed for ${recipient}. Error:`, errorMessage);
       console.error("[Edge Function] Full error response:", JSON.stringify(data));
       
       // Update record as failed with detailed error message
@@ -254,7 +279,8 @@ serve(async (req) => {
           mintingDetails: {
             blockchain,
             recipientFormat,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            templateInfo: templateData
           }
         }),
         { 
