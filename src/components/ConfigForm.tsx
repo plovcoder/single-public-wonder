@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +14,7 @@ interface Project {
   name: string;
   api_key: string;
   template_id: string;
+  collection_id: string;
   blockchain: string;
 }
 
@@ -37,6 +37,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
     name: '',
     api_key: '',
     template_id: '',
+    collection_id: '',
     blockchain: 'chiliz'
   });
   
@@ -84,6 +85,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
         name: '',
         api_key: '',
         template_id: '',
+        collection_id: '',
         blockchain: 'chiliz'
       });
       // Reset validation states
@@ -215,7 +217,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!currentProject.name || !currentProject.api_key || !currentProject.template_id) {
+    if (!currentProject.name || !currentProject.api_key || !currentProject.template_id || !currentProject.collection_id) {
       toast({
         title: "Missing information",
         description: "Please fill in all project details",
@@ -244,6 +246,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
             name: currentProject.name,
             api_key: currentProject.api_key,
             template_id: currentProject.template_id,
+            collection_id: currentProject.collection_id,
             blockchain: currentProject.blockchain
           })
           .eq('id', currentProject.id)
@@ -256,6 +259,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
             name: currentProject.name,
             api_key: currentProject.api_key,
             template_id: currentProject.template_id,
+            collection_id: currentProject.collection_id,
             blockchain: currentProject.blockchain
           })
           .select();
@@ -277,6 +281,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
           name: '',
           api_key: '',
           template_id: '',
+          collection_id: '',
           blockchain: 'chiliz'
         });
         setIsAddingProject(false);
@@ -402,11 +407,27 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
           </div>
           
           <div className="space-y-2">
+            <Label htmlFor="collection-id">Collection ID</Label>
+            <Input
+              id="collection-id"
+              placeholder="Enter your Collection ID (e.g. default-polygon-amoy)"
+              value={currentProject.collection_id}
+              onChange={(e) => setCurrentProject(prev => ({
+                ...prev, 
+                collection_id: e.target.value
+              }))}
+            />
+            <p className="text-xs text-muted-foreground">
+              This is the ID that appears in the Crossmint URL: collections/{collectionId}/nfts
+            </p>
+          </div>
+          
+          <div className="space-y-2">
             <Label htmlFor="template-id">Template ID</Label>
             <div className="relative">
               <Input
                 id="template-id"
-                placeholder="Enter your Template ID"
+                placeholder="Enter your Template ID (e.g. 9e441746-c405-490e-afb1...)"
                 value={currentProject.template_id}
                 onChange={handleTemplateIdChange}
                 onBlur={handleTemplateIdBlur}
@@ -427,6 +448,9 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
                 )}
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              This is the UUID that appears in the Crossmint dashboard when viewing a template
+            </p>
             
             {templateValidationStatus === 'invalid' && validationError && (
               <p className="text-sm text-red-500 mt-1">{validationError}</p>

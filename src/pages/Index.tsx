@@ -7,19 +7,15 @@ import ConfigForm from "@/components/ConfigForm";
 import { supabase } from "@/integrations/supabase/client";
 import RecipientInput from "@/components/RecipientInput";
 import MintingStats from "@/components/MintingStats";
-import { MintingService } from "@/services/MintingService";
+import { MintingService, MintingProject } from "@/services/MintingService";
 
 const Index: React.FC = () => {
   const [mintingRecords, setMintingRecords] = useState<MintingRecord[]>([]);
   const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
-  const [currentProject, setCurrentProject] = useState<{
-    id?: string;
-    apiKey: string;
-    templateId: string;
-    blockchain: string;
-  }>({
+  const [currentProject, setCurrentProject] = useState<MintingProject>({
     apiKey: '',
     templateId: '',
+    collectionId: '',
     blockchain: 'chiliz'
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -45,6 +41,7 @@ const Index: React.FC = () => {
           id: project.id,
           apiKey: project.api_key,
           templateId: project.template_id,
+          collectionId: project.collection_id || project.template_id, // Fallback for backwards compatibility
           blockchain: project.blockchain
         });
         
@@ -78,6 +75,7 @@ const Index: React.FC = () => {
           id: data.id,
           apiKey: data.api_key,
           templateId: data.template_id,
+          collectionId: data.collection_id || data.template_id, // Fallback for backwards compatibility
           blockchain: data.blockchain
         });
         
@@ -95,12 +93,14 @@ const Index: React.FC = () => {
     id?: string; 
     api_key: string; 
     template_id: string; 
+    collection_id: string;
     blockchain: string 
   }) => {
     setCurrentProject({
       id: project.id,
       apiKey: project.api_key,
       templateId: project.template_id,
+      collectionId: project.collection_id,
       blockchain: project.blockchain
     });
   };
@@ -164,7 +164,7 @@ const Index: React.FC = () => {
       return;
     }
     
-    if (!currentProject.apiKey || !currentProject.templateId) {
+    if (!currentProject.apiKey || !currentProject.templateId || !currentProject.collectionId) {
       toast({
         title: "Missing configuration",
         description: "Please select a project and configure its details",

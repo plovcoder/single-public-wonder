@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
@@ -65,8 +66,8 @@ serve(async (req) => {
       recipient: formattedRecipient,
     };
     
-    // Only include templateId if it's provided
-    if (templateId) {
+    // Only include templateId if it's provided and different from collectionId
+    if (templateId && templateId !== collectionId) {
       mintPayload.templateId = templateId;
       console.log(`[Edge Function] Including templateId in payload: ${templateId}`);
     }

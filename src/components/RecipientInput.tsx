@@ -7,15 +7,10 @@ import { RefreshCcw, CheckSquare, Upload, AlertTriangle, InfoIcon } from "lucide
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { MintingProject } from "@/services/MintingService";
 
 interface RecipientInputProps {
-  currentProject: {
-    id?: string;
-    apiKey: string;
-    templateId: string;
-    collectionId: string;
-    blockchain: string;
-  };
+  currentProject: MintingProject;
   onRecipientsLoaded: (records: MintingRecord[]) => void;
   failedMintCount: number;
   isLoading: boolean;
@@ -271,8 +266,8 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
             <div className="mt-1">
               <p>🔗 <strong>Template blockchain:</strong> {templateInfo.readableChain || getBlockchainDisplayName(templateInfo.chain)}</p>
               {templateInfo.name && <p>📄 <strong>Template name:</strong> {templateInfo.name}</p>}
-              {currentProject.templateId && <p>🆔 <strong>Template ID:</strong> {currentProject.templateId}</p>}
-              {currentProject.collectionId && <p>📦 <strong>Collection ID:</strong> {currentProject.collectionId}</p>}
+              <p>🆔 <strong>Template ID:</strong> {currentProject.templateId}</p>
+              <p>📦 <strong>Collection ID:</strong> {currentProject.collectionId}</p>
               {templateInfo.compatibleWallets && (
                 <p className="mt-1">💼 <strong>Required wallet format:</strong> {templateInfo.compatibleWallets.walletPrefix}</p>
               )}
@@ -289,7 +284,13 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
           <p className="text-sm font-medium">
-            {isValidatingTemplate ? 'Validating template...' : `🔗 Selected blockchain: ${getBlockchainDisplayName(currentProject.blockchain)}`}
+            {isValidatingTemplate ? 'Validating template...' : (
+              <>
+                🔗 Selected blockchain: {getBlockchainDisplayName(currentProject.blockchain)}<br/>
+                📦 Collection ID: {currentProject.collectionId}<br/>
+                🆔 Template ID: {currentProject.templateId}
+              </>
+            )}
           </p>
         </div>
       )}
