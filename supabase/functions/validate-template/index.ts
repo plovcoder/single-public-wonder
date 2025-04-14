@@ -66,12 +66,39 @@ serve(async (req) => {
       // Add helper properties about blockchain compatibility
       if (response.ok && data.chain) {
         const chain = data.chain.toLowerCase();
+        
+        // More obvious flags for blockchain type
+        const isEVM = ['ethereum', 'polygon', 'chiliz'].some(network => chain.includes(network));
+        const isSolana = chain.includes('solana');
+        
         data.compatibleWallets = {
-          isEVM: chain.includes('ethereum') || chain.includes('polygon') || chain.includes('chiliz'),
-          isSolana: chain.includes('solana'),
+          isEVM: isEVM,
+          isSolana: isSolana,
           requiresFormat: chain,
-          walletPrefix: chain.includes('solana') ? 'Solana addresses' : 'EVM addresses (0x...)'
+          walletPrefix: isSolana ? 'Solana addresses' : 'EVM addresses (0x...)',
+          recommendedAddressFormat: isSolana ? 
+            'Solana address (e.g., 7Nw3Sbj8wNXnGzL6M6xx1GRFGwRk5VfhRGQmzYN2eL3H)' : 
+            'EVM address (e.g., 0x1234...)',
+          expectedAddressType: isSolana ? 'solana' : 'evm'
         };
+        
+        // Add readable blockchain name for display
+        if (chain.includes('chiliz')) {
+          data.readableChain = 'Chiliz';
+          data.standardizedChain = 'chiliz';
+        } else if (chain.includes('polygon')) {
+          data.readableChain = 'Polygon';
+          data.standardizedChain = 'polygon-amoy';
+        } else if (chain.includes('ethereum')) {
+          data.readableChain = 'Ethereum';
+          data.standardizedChain = 'ethereum-sepolia';
+        } else if (chain.includes('solana')) {
+          data.readableChain = 'Solana';
+          data.standardizedChain = 'solana';
+        } else {
+          data.readableChain = chain.charAt(0).toUpperCase() + chain.slice(1);
+          data.standardizedChain = chain;
+        }
       }
     } catch (e) {
       console.error('[Validate Template] Failed to parse response:', e);

@@ -1,9 +1,10 @@
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import FileUploader from "@/components/FileUploader";
-import { RefreshCcw, CheckSquare, Upload, AlertTriangle } from "lucide-react";
+import { RefreshCcw, CheckSquare, Upload, AlertTriangle, InfoIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -30,13 +31,60 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
 }) => {
   const [manualInput, setManualInput] = useState('');
   const [blockchainMismatchWarning, setBlockchainMismatchWarning] = useState<string | null>(null);
+  const [isValidatingTemplate, setIsValidatingTemplate] = useState(false);
+  const [templateInfo, setTemplateInfo] = useState<any>(null);
+
+  // Validate template when component mounts or templateId changes
+  React.useEffect(() => {
+    if (currentProject.templateId && currentProject.apiKey) {
+      validateTemplateBlockchain();
+    }
+  }, [currentProject.templateId, currentProject.apiKey]);
+
+  const validateTemplateBlockchain = async () => {
+    if (!currentProject.templateId || !currentProject.apiKey) return;
+    
+    setIsValidatingTemplate(true);
+    try {
+      const response = await fetch(
+        `https://ikuviazxpqpbomfaucom.supabase.co/functions/v1/validate-template?templateId=${currentProject.templateId}&apiKey=${currentProject.apiKey}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Template validation data:", data);
+        
+        setTemplateInfo(data);
+        
+        // Show informational message about the template's blockchain
+        if (data.chain) {
+          const actualChain = data.readableChain || data.chain;
+          if (actualChain.toLowerCase() !== currentProject.blockchain.toLowerCase()) {
+            console.warn(`Template blockchain (${actualChain}) differs from selected blockchain (${currentProject.blockchain})`);
+          }
+        }
+      } else {
+        console.error("Failed to validate template:", await response.text());
+      }
+    } catch (error) {
+      console.error("Error validating template:", error);
+    } finally {
+      setIsValidatingTemplate(false);
+    }
+  };
 
   const handleManualInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setManualInput(e.target.value);
     
     // Check for potential blockchain mismatches
     const value = e.target.value.trim();
-    if (value) {
+    if (value && templateInfo?.compatibleWallets) {
       // Simple check for wallet type
       const walletAddresses = value
         .split(/[\s,]+/)
@@ -47,16 +95,17 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
         const hasEVMAddresses = walletAddresses.some(addr => addr.startsWith('0x'));
         const hasSolanaAddresses = walletAddresses.some(addr => !addr.startsWith('0x') && addr.length >= 32);
         
-        if (hasEVMAddresses && currentProject.blockchain === 'solana') {
+        const { isEVM, isSolana, walletPrefix, recommendedAddressFormat } = templateInfo.compatibleWallets;
+        
+        if (hasEVMAddresses && isSolana) {
           setBlockchainMismatchWarning(
-            "Warning: You're adding EVM addresses (0x...) but your template is configured for Solana. This will cause minting errors."
+            `Warning: You're adding EVM addresses (0x...) but your template is for Solana. ` +
+            `This will cause minting errors. Please use ${recommendedAddressFormat}.`
           );
-        } else if (hasSolanaAddresses && 
-          (currentProject.blockchain === 'chiliz' || 
-           currentProject.blockchain === 'ethereum-sepolia' || 
-           currentProject.blockchain === 'polygon-amoy')) {
+        } else if (hasSolanaAddresses && isEVM) {
           setBlockchainMismatchWarning(
-            `Warning: You're adding Solana addresses but your template is configured for ${currentProject.blockchain}. This will cause minting errors.`
+            `Warning: You're adding Solana addresses but your template is for ${templateInfo.readableChain || templateInfo.chain}. ` +
+            `This will cause minting errors. Please use ${recommendedAddressFormat}.`
           );
         } else {
           setBlockchainMismatchWarning(null);
@@ -211,7 +260,25 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
 
   return (
     <div className="space-y-4">
-      {currentProject.blockchain && (
+      {templateInfo?.chain && (
+        <Alert className="bg-blue-50 border-blue-200 text-blue-800 mb-4">
+          <div className="flex items-center gap-2">
+            <InfoIcon className="h-4 w-4" />
+            <AlertTitle className="text-sm font-medium">Template Information</AlertTitle>
+          </div>
+          <AlertDescription className="text-sm mt-1">
+            <div className="mt-1">
+              <p>🔗 <strong>Template blockchain:</strong> {templateInfo.readableChain || getBlockchainDisplayName(templateInfo.chain)}</p>
+              {templateInfo.name && <p>📄 <strong>Template name:</strong> {templateInfo.name}</p>}
+              {templateInfo.compatibleWallets && (
+                <p className="mt-1">💼 <strong>Required wallet format:</strong> {templateInfo.compatibleWallets.walletPrefix}</p>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {currentProject.blockchain && !templateInfo && (
         <div className="flex items-center p-2 mb-4 bg-blue-50 text-blue-700 rounded-md">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mr-2">
             <circle cx="12" cy="12" r="10"></circle>
@@ -219,7 +286,7 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
           <p className="text-sm font-medium">
-            🔗 Template blockchain: {getBlockchainDisplayName(currentProject.blockchain)}
+            {isValidatingTemplate ? 'Validating template...' : `🔗 Selected blockchain: ${getBlockchainDisplayName(currentProject.blockchain)}`}
           </p>
         </div>
       )}

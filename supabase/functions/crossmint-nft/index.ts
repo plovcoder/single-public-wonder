@@ -99,10 +99,10 @@ serve(async (req) => {
     const crossmintEndpoint = "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts";
     console.log(`[Edge Function] Crossmint endpoint: ${crossmintEndpoint}`);
     
-    // First, validate the template to get the correct blockchain
+    // First, validate the template to get information (but don't use for validation)
     let templateData;
     try {
-      console.log(`[Edge Function] Validating template ID: ${templateId} before minting`);
+      console.log(`[Edge Function] Getting template info from ID: ${templateId} for reference only`);
       const templateResponse = await fetch(
         `https://staging.crossmint.com/api/2022-06-09/collections/${templateId}`,
         {
@@ -116,67 +116,23 @@ serve(async (req) => {
       
       if (templateResponse.ok) {
         templateData = await templateResponse.json();
-        console.log(`[Edge Function] Template validation successful. Template info:`, {
+        console.log(`[Edge Function] Template info retrieved successfully:`, {
           name: templateData.name,
           chain: templateData.chain,
           status: templateData.status
         });
-        
-        // Check if wallet format matches template blockchain
-        if (!isEmailRecipient) {
-          const isEVMAddress = recipient.startsWith('0x');
-          const isSolanaAddress = !isEVMAddress && recipient.length >= 32;
-          
-          // Validate wallet type against template blockchain
-          if (templateData.chain?.toLowerCase().includes('solana') && isEVMAddress) {
-            console.error(`[Edge Function] Blockchain mismatch: Template is for Solana but received EVM address ${recipient}`);
-            return new Response(
-              JSON.stringify({ 
-                error: "Blockchain mismatch", 
-                message: "The Template ID is for Solana blockchain, but an EVM address (0x...) was provided. Please use a Solana wallet address or create a new Template for EVM chains.",
-                details: {
-                  templateChain: templateData.chain,
-                  recipientType: "EVM address"
-                }
-              }),
-              { 
-                status: 400, 
-                headers: { ...corsHeaders, "Content-Type": "application/json" } 
-              }
-            );
-          }
-          
-          if ((templateData.chain?.toLowerCase().includes('ethereum') || 
-               templateData.chain?.toLowerCase().includes('polygon') ||
-               templateData.chain?.toLowerCase().includes('chiliz')) && 
-              isSolanaAddress) {
-            console.error(`[Edge Function] Blockchain mismatch: Template is for EVM chain but received Solana address ${recipient}`);
-            return new Response(
-              JSON.stringify({ 
-                error: "Blockchain mismatch", 
-                message: `The Template ID is for ${templateData.chain} blockchain, but a Solana address was provided. Please use an EVM wallet address (0x...) or create a new Template for Solana.`,
-                details: {
-                  templateChain: templateData.chain,
-                  recipientType: "Solana address"
-                }
-              }),
-              { 
-                status: 400, 
-                headers: { ...corsHeaders, "Content-Type": "application/json" } 
-              }
-            );
-          }
-        }
       } else {
-        console.error(`[Edge Function] Failed to validate template: ${templateId}`, await templateResponse.text());
+        console.warn(`[Edge Function] Could not get template info: ${templateId}`, await templateResponse.text());
+        // Continue without template data - not blocking the mint
       }
     } catch (e) {
-      console.error(`[Edge Function] Error validating template:`, e);
+      console.warn(`[Edge Function] Error getting template info:`, e);
+      // Continue without template data - not blocking the mint
     }
     
     let response;
     try {
-      // Prepare the payload for Crossmint
+      // Prepare the payload for Crossmint - simplified!
       const mintPayload = {
         recipient: recipientFormat,
         templateId: templateId
@@ -294,12 +250,13 @@ serve(async (req) => {
       console.error(`[Edge Function] Minting failed for ${recipient}. Error:`, errorMessage);
       console.error("[Edge Function] Full error response:", JSON.stringify(data));
       
-      // Add user-friendly message for common errors
+      // Create user-friendly message for blockchain mismatch errors
       let userFriendlyMessage = errorMessage;
-      if (errorMessage.includes("Invalid solana address")) {
-        userFriendlyMessage = `Blockchain mismatch: The template (${templateData?.name || templateId}) is configured for Solana blockchain, but you're trying to mint to an EVM address (${recipient}). Please create a new template for EVM chains or use a Solana wallet.`;
-      } else if (errorMessage.includes("is not a valid ethereum")) {
-        userFriendlyMessage = `Blockchain mismatch: The template (${templateData?.name || templateId}) is configured for an EVM blockchain, but you're trying to mint to a non-EVM address (${recipient}). Please create a new template for the correct blockchain or use an appropriate wallet.`;
+      
+      if (errorMessage.includes("Invalid solana address") && !isEmailRecipient) {
+        userFriendlyMessage = `Blockchain mismatch: This template (${templateData?.name || templateId}) is for the Solana blockchain, but you provided an EVM address (${recipient}). Please use a Solana wallet address or create a new template for EVM chains.`;
+      } else if (errorMessage.includes("is not a valid ethereum") && !isEmailRecipient) {
+        userFriendlyMessage = `Blockchain mismatch: This template (${templateData?.name || templateId}) is for an EVM blockchain, but you provided a non-EVM address (${recipient}). Please use an EVM wallet address (0x...) or create a new template for the appropriate blockchain.`;
       }
       
       // Update record as failed with detailed error message
