@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { RefreshCcw, AlertCircle, Trash2 } from "lucide-react";
+import { RefreshCcw, AlertCircle, Trash2, CheckSquare } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -40,6 +39,23 @@ const MintingTable: React.FC<MintingTableProps> = ({
 
   // Count pending records to enable/disable the select all button
   const pendingRecordsCount = records.filter(record => record.status === 'pending').length;
+
+  // Count records to enable/disable the select all button
+  const totalRecords = records.length;
+  const allSelected = totalRecords > 0 && selectedRecords.length === totalRecords;
+
+  // Handle select all records
+  const handleSelectAll = () => {
+    const allRecordIds = records.map(record => record.id || '').filter(id => id !== '');
+    
+    if (allSelected) {
+      // If all are selected, deselect all
+      allRecordIds.forEach(id => onSelectRecord(id, false));
+    } else {
+      // Select all records
+      allRecordIds.forEach(id => onSelectRecord(id, true));
+    }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -86,18 +102,29 @@ const MintingTable: React.FC<MintingTableProps> = ({
 
   return (
     <div className="w-full overflow-auto border rounded-md">
-      {pendingRecordsCount > 0 && onSelectAllPending && (
-        <div className="p-2 bg-gray-50 border-b flex justify-between items-center">
-          <span className="text-sm text-gray-500">{pendingRecordsCount} pending record(s)</span>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onSelectAllPending}
+      <div className="p-2 bg-gray-50 border-b flex justify-between items-center">
+        <span className="text-sm text-gray-500">{totalRecords} record(s)</span>
+        <div className="space-x-2">
+          {pendingRecordsCount > 0 && onSelectAllPending && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onSelectAllPending}
+            >
+              Select All Pending
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSelectAll}
+            className="flex items-center gap-2"
           >
-            Select All Pending
+            <CheckSquare className="w-4 h-4" />
+            {allSelected ? 'Deselect All' : 'Select All'}
           </Button>
         </div>
-      )}
+      </div>
       <Table>
         <TableHeader>
           <TableRow>
