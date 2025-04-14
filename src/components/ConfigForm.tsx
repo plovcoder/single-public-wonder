@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -118,20 +117,19 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
     }
   };
   
-  // Debounced validation function
-  const validateTemplateId = debounce(async (templateId: string, apiKey: string) => {
-    if (!templateId || !apiKey) {
+  const handleTemplateAndCollectionValidation = debounce(async (templateId: string, collectionId: string, apiKey: string) => {
+    if (!apiKey) {
       setTemplateValidationStatus('idle');
       setTemplateInfo({});
       setValidationError(null);
       return;
     }
-    
+
     setTemplateValidationStatus('validating');
-    
+
     try {
       const response = await fetch(
-        `https://ikuviazxpqpbomfaucom.supabase.co/functions/v1/validate-template?templateId=${templateId}&apiKey=${apiKey}`,
+        `https://ikuviazxpqpbomfaucom.supabase.co/functions/v1/validate-template?templateId=${templateId}&collectionId=${collectionId}&apiKey=${apiKey}`,
         {
           method: 'GET',
           headers: {
@@ -139,69 +137,59 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
           }
         }
       );
-      
+
       const data = await response.json();
-      
+
       if (response.ok) {
         setTemplateValidationStatus('valid');
-        
-        // Extract blockchain from the response
-        const blockchain = data.chain?.toLowerCase() || '';
-        
-        // Standardize blockchain values
-        let standardizedBlockchain = blockchain;
-        if (blockchain.includes('polygon')) standardizedBlockchain = 'polygon-amoy';
-        if (blockchain.includes('ethereum')) standardizedBlockchain = 'ethereum-sepolia';
-        if (blockchain.includes('solana')) standardizedBlockchain = 'solana';
-        if (blockchain.includes('chiliz')) standardizedBlockchain = 'chiliz';
-        
-        // Store template info
         setTemplateInfo({
           name: data.name,
-          blockchain: standardizedBlockchain,
+          blockchain: data.chain?.toLowerCase() || '',
           image: data.metadata?.image
         });
-        
+
         // Update blockchain only if we got a valid value
+        const standardizedBlockchain = standardizeBlockchain(data.chain);
         if (standardizedBlockchain) {
           setCurrentProject(prev => ({
             ...prev,
             blockchain: standardizedBlockchain
           }));
         }
-        
+
         setValidationError(null);
       } else {
         setTemplateValidationStatus('invalid');
         setTemplateInfo({});
-        setValidationError('Template ID no encontrado. Verifica que estés usando el entorno correcto.');
+        setValidationError(data.message || 'Error validating configuration');
       }
     } catch (error) {
       console.error('Error validating template:', error);
       setTemplateValidationStatus('invalid');
       setTemplateInfo({});
-      setValidationError('Error al validar el Template ID. Intenta nuevamente.');
+      setValidationError('Error al validar la configuración. Intenta nuevamente.');
     }
   }, 500);
-  
-  const handleTemplateIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTemplateId = e.target.value;
+
+  const standardizeBlockchain = (chain?: string): string => {
+    if (!chain) return 'chiliz';
     
-    setCurrentProject(prev => ({
-      ...prev,
-      template_id: newTemplateId
-    }));
-    
-    // Only validate if we have both template ID and API key
-    if (newTemplateId && currentProject.api_key) {
-      validateTemplateId(newTemplateId, currentProject.api_key);
-    } else {
-      setTemplateValidationStatus('idle');
-      setTemplateInfo({});
-      setValidationError(null);
+    const chainMap: Record<string, string> = {
+      'polygon': 'polygon-amoy',
+      'ethereum': 'ethereum-sepolia',
+      'solana': 'solana',
+      'chiliz': 'chiliz'
+    };
+
+    for (const [key, value] of Object.entries(chainMap)) {
+      if (chain.toLowerCase().includes(key)) {
+        return value;
+      }
     }
+
+    return 'chiliz';
   };
-  
+
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newApiKey = e.target.value;
     
@@ -210,16 +198,60 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
       api_key: newApiKey
     }));
     
-    // If we already have a template ID, validate with the new API key
-    if (currentProject.template_id && newApiKey) {
-      validateTemplateId(currentProject.template_id, newApiKey);
+    // If we have both collection ID and template ID, validate
+    if (currentProject.template_id && currentProject.collection_id) {
+      handleTemplateAndCollectionValidation(
+        currentProject.template_id,
+        currentProject.collection_id,
+        newApiKey
+      );
+    }
+  };
+
+  const handleTemplateIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTemplateId = e.target.value;
+    
+    setCurrentProject(prev => ({
+      ...prev,
+      template_id: newTemplateId
+    }));
+
+    // If we have API key and collection ID, validate
+    if (currentProject.api_key && currentProject.collection_id) {
+      handleTemplateAndCollectionValidation(
+        newTemplateId,
+        currentProject.collection_id,
+        currentProject.api_key
+      );
+    }
+  };
+
+  const handleCollectionIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newCollectionId = e.target.value;
+    
+    setCurrentProject(prev => ({
+      ...prev,
+      collection_id: newCollectionId
+    }));
+
+    // If we have API key and template ID, validate
+    if (currentProject.api_key && currentProject.template_id) {
+      handleTemplateAndCollectionValidation(
+        currentProject.template_id,
+        newCollectionId,
+        currentProject.api_key
+      );
     }
   };
   
   const handleTemplateIdBlur = () => {
     // Validate on blur if we have both template ID and API key
     if (currentProject.template_id && currentProject.api_key) {
-      validateTemplateId(currentProject.template_id, currentProject.api_key);
+      handleTemplateAndCollectionValidation(
+        currentProject.template_id,
+        currentProject.collection_id,
+        currentProject.api_key
+      );
     }
   };
   
@@ -437,23 +469,24 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
               onChange={handleApiKeyChange}
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="collection-id">Collection ID</Label>
             <Input
               id="collection-id"
               placeholder="Enter your Collection ID (e.g. af08ba4d-927d-4d94-b3d7-cdba49e80fd8)"
               value={currentProject.collection_id}
-              onChange={(e) => setCurrentProject(prev => ({
-                ...prev, 
-                collection_id: e.target.value
-              }))}
+              onChange={handleCollectionIdChange}
+              className={`${
+                templateValidationStatus === 'invalid' ? 'border-red-500 focus-visible:ring-red-500' : 
+                templateValidationStatus === 'valid' ? 'border-green-500 focus-visible:ring-green-500' : ''
+              }`}
             />
             <p className="text-xs text-muted-foreground">
-              Usado en la URL: /collections/{currentProject.collection_id}/nfts (distinto del Template ID)
+              Used in API endpoint URL: /collections/{currentProject.collection_id}/nfts
             </p>
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="template-id">Template ID</Label>
             <div className="relative">
@@ -462,7 +495,6 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
                 placeholder="Enter your Template ID (e.g. 47bdeb30-f082-4c74-a02b-02bee1f8a49f)"
                 value={currentProject.template_id}
                 onChange={handleTemplateIdChange}
-                onBlur={handleTemplateIdBlur}
                 className={`pr-10 ${
                   templateValidationStatus === 'invalid' ? 'border-red-500 focus-visible:ring-red-500' : 
                   templateValidationStatus === 'valid' ? 'border-green-500 focus-visible:ring-green-500' : ''
@@ -481,21 +513,20 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Se envía en el body de la petición como "templateId" (distinto del Collection ID)
+              Sent in request body as "templateId" to define NFT metadata
             </p>
-            
+
             {templateValidationStatus === 'invalid' && validationError && (
               <p className="text-sm text-red-500 mt-1">{validationError}</p>
             )}
-            
+
             {templateValidationStatus === 'valid' && templateInfo.name && (
               <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded-md">
-                <p className="text-sm font-medium text-green-800">Template validado correctamente</p>
-                <p className="text-sm text-green-700">Nombre: {templateInfo.name}</p>
-                
+                <p className="text-sm font-medium text-green-800">Configuration validated successfully</p>
+                <p className="text-sm text-green-700">Template Name: {templateInfo.name}</p>
                 {templateInfo.image && (
                   <div className="mt-2">
-                    <p className="text-sm text-green-700 mb-1">Vista previa NFT:</p>
+                    <p className="text-sm text-green-700 mb-1">NFT Preview:</p>
                     <img 
                       src={templateInfo.image} 
                       alt="NFT Preview" 
