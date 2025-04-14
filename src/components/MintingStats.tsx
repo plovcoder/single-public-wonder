@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { CheckSquare, Check, Trash2, AlertCircle } from "lucide-react";
+import { CheckSquare, Check, Trash2, AlertCircle, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface MintingStatsProps {
@@ -48,8 +48,28 @@ const MintingStats: React.FC<MintingStatsProps> = ({
     return "Mint selected NFTs";
   };
 
+  const renderConfigStatus = () => {
+    if (!currentProject.apiKey || !currentProject.templateId) {
+      return (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-2 text-sm text-yellow-800 mb-2">
+          <div className="flex items-center">
+            <Info className="h-4 w-4 mr-1" />
+            <span className="font-medium">Action Required:</span>
+          </div>
+          <ul className="list-disc ml-5 mt-1">
+            {!currentProject.apiKey && <li>Missing API Key</li>}
+            {!currentProject.templateId && <li>Missing Template ID</li>}
+          </ul>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="flex flex-col space-y-2">
+      {renderConfigStatus()}
+      
       <div className="flex items-center justify-between text-sm mt-2">
         <div className="flex space-x-4">
           <div className="flex items-center">

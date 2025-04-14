@@ -17,17 +17,28 @@ export class MintingService {
     updateRecordStatus: (recordId: string, status: 'minted' | 'failed', errorMessage?: string) => void
   ) {
     try {
-      console.log(`Minting NFT for recipient: ${record.recipient} with template: ${project.templateId} on blockchain: ${project.blockchain}`);
+      console.log(`[MintingService] Starting minting for recipient: ${record.recipient}`);
+      console.log(`[MintingService] Using config:`, {
+        templateId: project.templateId,
+        blockchain: project.blockchain,
+        apiKeyProvided: !!project.apiKey,
+        supabaseConfig: {
+          url: supabase.supabaseUrl,
+          hasKey: !!supabase.supabaseKey
+        }
+      });
       
       // Verify project configuration
       if (!project.apiKey || !project.templateId) {
         const error = "Missing API key or template ID";
-        console.error(error);
+        console.error(`[MintingService] Error: ${error}`);
         updateRecordStatus(record.id || '', 'failed', error);
         return { recipient: record.recipient, success: false, error: { message: error } };
       }
       
       // Call our edge function using Supabase client with proper authorization
+      console.log(`[MintingService] Invoking edge function 'crossmint-nft' with recipient: ${record.recipient}`);
+      
       const { data, error } = await supabase.functions.invoke(
         'crossmint-nft',
         {
@@ -40,13 +51,18 @@ export class MintingService {
         }
       );
       
-      console.log(`Response for ${record.recipient}:`, data || error);
+      console.log(`[MintingService] Response for ${record.recipient}:`, data || error);
+      
+      if (error) {
+        console.error(`[MintingService] Supabase invoke error:`, error);
+      }
       
       const success = !error && data?.success;
       const errorMessage = error?.message || data?.error?.message || "Unknown error";
       
       // Update record in database if it has an ID
       if (record.id && !record.id.startsWith('temp-')) {
+        console.log(`[MintingService] Updating record in database with status: ${success ? 'minted' : 'failed'}`);
         await supabase
           .from('nft_mints')
           .update({
@@ -70,7 +86,7 @@ export class MintingService {
         error: !success ? error || data?.error : null
       };
     } catch (error: any) {
-      console.error(`Error minting for ${record.recipient}:`, error);
+      console.error(`[MintingService] Unhandled error minting for ${record.recipient}:`, error);
       
       // Update record in database if it has an ID
       if (record.id && !record.id.startsWith('temp-')) {
