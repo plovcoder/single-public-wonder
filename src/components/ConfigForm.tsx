@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Plus, Edit } from 'lucide-react';
+import { Trash2, Plus, Check, X, Loader2 } from 'lucide-react';
+import { debounce } from 'lodash';
 
 interface Project {
   id?: string;
@@ -22,6 +23,12 @@ interface ConfigFormProps {
   onProjectChange: (projectId?: string) => void;
 }
 
+interface TemplateInfo {
+  name?: string;
+  blockchain?: string;
+  image?: string;
+}
+
 const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>();
@@ -32,6 +39,11 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
     template_id: '',
     blockchain: 'chiliz'
   });
+  
+  // New states for template validation
+  const [templateValidationStatus, setTemplateValidationStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+  const [templateInfo, setTemplateInfo] = useState<TemplateInfo>({});
+  const [validationError, setValidationError] = useState<string | null>(null);
   
   useEffect(() => {
     fetchProjects();
@@ -74,6 +86,10 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
         template_id: '',
         blockchain: 'chiliz'
       });
+      // Reset validation states
+      setTemplateValidationStatus('idle');
+      setTemplateInfo({});
+      setValidationError(null);
       return;
     }
     
@@ -83,6 +99,116 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
       setCurrentProject(selectedProject);
       onProjectChange(value);
       setIsAddingProject(false);
+      
+      // Reset validation states
+      setTemplateValidationStatus('idle');
+      setTemplateInfo({});
+      setValidationError(null);
+    }
+  };
+  
+  // Debounced validation function
+  const validateTemplateId = debounce(async (templateId: string, apiKey: string) => {
+    if (!templateId || !apiKey) {
+      setTemplateValidationStatus('idle');
+      setTemplateInfo({});
+      setValidationError(null);
+      return;
+    }
+    
+    setTemplateValidationStatus('validating');
+    
+    try {
+      const response = await fetch(
+        `https://ikuviazxpqpbomfaucom.supabase.co/functions/v1/validate-template?templateId=${templateId}&apiKey=${apiKey}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setTemplateValidationStatus('valid');
+        
+        // Extract blockchain from the response
+        const blockchain = data.chain?.toLowerCase() || '';
+        
+        // Standardize blockchain values
+        let standardizedBlockchain = blockchain;
+        if (blockchain.includes('polygon')) standardizedBlockchain = 'polygon-amoy';
+        if (blockchain.includes('ethereum')) standardizedBlockchain = 'ethereum-sepolia';
+        if (blockchain.includes('solana')) standardizedBlockchain = 'solana';
+        if (blockchain.includes('chiliz')) standardizedBlockchain = 'chiliz';
+        
+        // Store template info
+        setTemplateInfo({
+          name: data.name,
+          blockchain: standardizedBlockchain,
+          image: data.metadata?.image
+        });
+        
+        // Update blockchain only if we got a valid value
+        if (standardizedBlockchain) {
+          setCurrentProject(prev => ({
+            ...prev,
+            blockchain: standardizedBlockchain
+          }));
+        }
+        
+        setValidationError(null);
+      } else {
+        setTemplateValidationStatus('invalid');
+        setTemplateInfo({});
+        setValidationError('Template ID no encontrado. Verifica que estés usando el entorno correcto.');
+      }
+    } catch (error) {
+      console.error('Error validating template:', error);
+      setTemplateValidationStatus('invalid');
+      setTemplateInfo({});
+      setValidationError('Error al validar el Template ID. Intenta nuevamente.');
+    }
+  }, 500);
+  
+  const handleTemplateIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTemplateId = e.target.value;
+    
+    setCurrentProject(prev => ({
+      ...prev,
+      template_id: newTemplateId
+    }));
+    
+    // Only validate if we have both template ID and API key
+    if (newTemplateId && currentProject.api_key) {
+      validateTemplateId(newTemplateId, currentProject.api_key);
+    } else {
+      setTemplateValidationStatus('idle');
+      setTemplateInfo({});
+      setValidationError(null);
+    }
+  };
+  
+  const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newApiKey = e.target.value;
+    
+    setCurrentProject(prev => ({
+      ...prev,
+      api_key: newApiKey
+    }));
+    
+    // If we already have a template ID, validate with the new API key
+    if (currentProject.template_id && newApiKey) {
+      validateTemplateId(currentProject.template_id, newApiKey);
+    }
+  };
+  
+  const handleTemplateIdBlur = () => {
+    // Validate on blur if we have both template ID and API key
+    if (currentProject.template_id && currentProject.api_key) {
+      validateTemplateId(currentProject.template_id, currentProject.api_key);
     }
   };
   
@@ -93,6 +219,16 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
       toast({
         title: "Missing information",
         description: "Please fill in all project details",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Do not allow submission if template validation failed
+    if (templateValidationStatus === 'invalid') {
+      toast({
+        title: "Invalid Template ID",
+        description: validationError || "The Template ID is not valid",
         variant: "destructive"
       });
       return;
@@ -144,6 +280,11 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
           blockchain: 'chiliz'
         });
         setIsAddingProject(false);
+        
+        // Reset validation states
+        setTemplateValidationStatus('idle');
+        setTemplateInfo({});
+        setValidationError(null);
         
         toast({
           title: "Project saved",
@@ -256,24 +397,61 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
               type="password"
               placeholder="Enter your Crossmint API Key"
               value={currentProject.api_key}
-              onChange={(e) => setCurrentProject(prev => ({
-                ...prev, 
-                api_key: e.target.value
-              }))}
+              onChange={handleApiKeyChange}
             />
           </div>
           
           <div className="space-y-2">
             <Label htmlFor="template-id">Template ID</Label>
-            <Input
-              id="template-id"
-              placeholder="Enter your Template ID"
-              value={currentProject.template_id}
-              onChange={(e) => setCurrentProject(prev => ({
-                ...prev, 
-                template_id: e.target.value
-              }))}
-            />
+            <div className="relative">
+              <Input
+                id="template-id"
+                placeholder="Enter your Template ID"
+                value={currentProject.template_id}
+                onChange={handleTemplateIdChange}
+                onBlur={handleTemplateIdBlur}
+                className={`pr-10 ${
+                  templateValidationStatus === 'invalid' ? 'border-red-500 focus-visible:ring-red-500' : 
+                  templateValidationStatus === 'valid' ? 'border-green-500 focus-visible:ring-green-500' : ''
+                }`}
+              />
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                {templateValidationStatus === 'validating' && (
+                  <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />
+                )}
+                {templateValidationStatus === 'valid' && (
+                  <Check className="h-4 w-4 text-green-500" />
+                )}
+                {templateValidationStatus === 'invalid' && (
+                  <X className="h-4 w-4 text-red-500" />
+                )}
+              </div>
+            </div>
+            
+            {templateValidationStatus === 'invalid' && validationError && (
+              <p className="text-sm text-red-500 mt-1">{validationError}</p>
+            )}
+            
+            {templateValidationStatus === 'valid' && templateInfo.name && (
+              <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded-md">
+                <p className="text-sm font-medium text-green-800">Template validado correctamente</p>
+                <p className="text-sm text-green-700">Nombre: {templateInfo.name}</p>
+                
+                {templateInfo.image && (
+                  <div className="mt-2">
+                    <p className="text-sm text-green-700 mb-1">Vista previa NFT:</p>
+                    <img 
+                      src={templateInfo.image} 
+                      alt="NFT Preview" 
+                      className="h-20 w-20 object-cover rounded-md"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">
@@ -284,6 +462,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
                 ...prev, 
                 blockchain: value
               }))}
+              disabled={templateValidationStatus === 'valid' && !!templateInfo.blockchain}
             >
               <SelectTrigger id="blockchain">
                 <SelectValue placeholder="Select blockchain" />
@@ -295,9 +474,14 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
                 <SelectItem value="chiliz">Chiliz</SelectItem>
               </SelectContent>
             </Select>
+            {templateValidationStatus === 'valid' && templateInfo.blockchain && (
+              <p className="text-xs text-green-600 mt-1">
+                Blockchain detectado automáticamente del template
+              </p>
+            )}
           </div>
           
-          <Button type="submit" className="w-full">
+          <Button type="submit" className="w-full" disabled={templateValidationStatus === 'invalid'}>
             {currentProject.id ? 'Update Project' : 'Create Project'}
           </Button>
         </form>
