@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,7 +75,13 @@ const Index: React.FC = () => {
         }
         
         if (mintData) {
-          setMintingRecords(mintData);
+          // Safely map the data to ensure status is of correct type
+          const safeData = mintData.map((item) => ({
+            ...item,
+            status: item.status as 'pending' | 'minted' | 'failed',
+          }));
+          
+          setMintingRecords(safeData);
         }
       }
     };
