@@ -102,7 +102,11 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
     const selectedProject = projects.find(p => p.id === value);
     if (selectedProject) {
       setSelectedProjectId(value);
-      setCurrentProject(selectedProject);
+      // Ensure collection_id is set, falling back to template_id if necessary
+      setCurrentProject({
+        ...selectedProject,
+        collection_id: selectedProject.collection_id || selectedProject.template_id
+      });
       onProjectChange(value);
       setIsAddingProject(false);
       
