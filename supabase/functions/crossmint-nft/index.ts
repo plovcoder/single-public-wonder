@@ -66,10 +66,12 @@ serve(async (req) => {
       recipient: formattedRecipient,
     };
     
-    // Only include templateId if it's provided and different from collectionId
-    if (templateId && templateId !== collectionId) {
+    // ALWAYS include templateId if it's provided
+    if (templateId) {
       mintPayload.templateId = templateId;
       console.log(`[Edge Function] Including templateId in payload: ${templateId}`);
+    } else {
+      console.warn("[Edge Function] Warning: No templateId provided. This may cause an error with Crossmint API.");
     }
     
     console.log(`[Edge Function] Sending request to Crossmint:`, mintPayload);
