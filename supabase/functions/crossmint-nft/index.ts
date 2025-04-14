@@ -83,7 +83,7 @@ serve(async (req) => {
     console.log("[Edge Function] Supabase client created successfully");
 
     // Determine if the recipient is an email or a wallet address
-    // IMPORTANT: Only format email addresses, leave wallet addresses completely as-is
+    // CRITICAL: Only format email addresses, leave wallet addresses COMPLETELY as-is
     let recipientFormat;
     const isEmailRecipient = recipient.includes("@");
     
@@ -112,6 +112,7 @@ serve(async (req) => {
         templateId: templateId
       });
       
+      // Send payload to Crossmint API
       response = await fetch(
         crossmintEndpoint,
         {

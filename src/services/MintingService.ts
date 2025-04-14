@@ -45,13 +45,16 @@ export class MintingService {
         apiKeyProvided: !!project.apiKey,
       });
       
+      // IMPORTANT: Pass the recipient exactly as it is, no modifications
+      // Edge function will handle the appropriate formatting
+      
       // Make the request to the edge function
       console.log(`[MintingService] Sending request to edge function now...`);
       const { data, error } = await supabase.functions.invoke(
         'crossmint-nft',
         {
           body: {
-            recipient: record.recipient,
+            recipient: record.recipient, // Pass recipient AS-IS, no modifications
             apiKey: project.apiKey,
             templateId: project.templateId,
             blockchain: project.blockchain
