@@ -6,7 +6,8 @@ import ConfigForm from "@/components/ConfigForm";
 import { supabase } from "@/integrations/supabase/client";
 import RecipientInput from "@/components/RecipientInput";
 import MintingStats from "@/components/MintingStats";
-import { MintingService, MintingProject } from "@/services/MintingService";
+import { MintingService } from "@/services/MintingService";
+import { MintingProject, Project } from "@/types/project";
 
 const Index: React.FC = () => {
   const [mintingRecords, setMintingRecords] = useState<MintingRecord[]>([]);
@@ -88,13 +89,7 @@ const Index: React.FC = () => {
     }
   };
   
-  const handleConfigSaved = (project: { 
-    id?: string; 
-    api_key: string; 
-    template_id: string; 
-    collection_id: string;
-    blockchain: string 
-  }) => {
+  const handleConfigSaved = (project: Project) => {
     setCurrentProject({
       id: project.id,
       apiKey: project.api_key,

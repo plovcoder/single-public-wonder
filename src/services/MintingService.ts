@@ -1,14 +1,7 @@
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
-
-export interface MintingProject {
-  id?: string;
-  apiKey: string;
-  templateId: string;
-  collectionId: string;
-  blockchain: string;
-}
+import { MintingProject } from "@/types/project";
 
 export class MintingService {
   static async mintNFT(

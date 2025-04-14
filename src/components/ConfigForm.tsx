@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,15 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Trash2, Plus, Check, X, Loader2, Info } from 'lucide-react';
 import { debounce } from 'lodash';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-interface Project {
-  id?: string;
-  name: string;
-  api_key: string;
-  template_id: string;
-  collection_id: string;
-  blockchain: string;
-}
+import { Project } from '@/types/project';
 
 interface ConfigFormProps {
   onConfigSaved: (project: Project) => void;
