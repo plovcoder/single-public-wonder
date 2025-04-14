@@ -14,31 +14,14 @@ serve(async (req) => {
   }
 
   try {
-    console.log("[Edge Function] Received minting request at:", new Date().toISOString());
-    
     // Parse request body
-    let requestBody;
-    try {
-      requestBody = await req.json();
-      console.log("[Edge Function] Parsed request body successfully");
-    } catch (e) {
-      console.error("[Edge Function] Failed to parse request body:", e);
-      return new Response(
-        JSON.stringify({ error: "Invalid request body" }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
-    
+    const requestBody = await req.json();
     const { recipient, apiKey, templateId } = requestBody;
     
-    console.log("[Edge Function] Request parameters received:", { 
-      recipient, 
+    console.log("[Edge Function] Request received:", {
+      recipient,
       templateId,
-      apiKeyProvided: !!apiKey,
-      timestampUTC: new Date().toISOString()
+      apiKeyProvided: !!apiKey
     });
     
     if (!recipient || !apiKey || !templateId) {
@@ -52,58 +35,53 @@ serve(async (req) => {
       );
     }
 
-    // Use Crossmint staging API
+    // Crossmint staging API
     const crossmintEndpoint = "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts";
     
-    // Simplified payload with only the essential data
+    // The minimum required payload
     const mintPayload = {
-      recipient: recipient,
-      templateId: templateId
+      recipient,
+      templateId
     };
     
-    console.log(`[Edge Function] Sending request to Crossmint with payload:`, mintPayload);
+    console.log(`[Edge Function] Sending request to Crossmint:`, mintPayload);
     
     // Send payload to Crossmint API
-    let response;
+    const response = await fetch(
+      crossmintEndpoint,
+      {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "content-type": "application/json",
+          "accept": "application/json",
+        },
+        body: JSON.stringify(mintPayload),
+      }
+    );
+    
+    // Get the response as text first for better logging
+    const responseText = await response.text();
+    console.log(`[Edge Function] Crossmint response (${response.status}):`, responseText);
+    
+    // Parse the response if it's JSON
+    let responseData;
     try {
-      response = await fetch(
-        crossmintEndpoint,
-        {
-          method: "POST",
-          headers: {
-            "x-api-key": apiKey,
-            "content-type": "application/json",
-            "accept": "application/json",
-          },
-          body: JSON.stringify(mintPayload),
-        }
-      );
-      
-      console.log("[Edge Function] Crossmint API response status:", response.status, response.statusText);
-      
-      const data = await response.json();
-      console.log("[Edge Function] Response body:", JSON.stringify(data));
-      
-      // Return Crossmint's response directly
-      return new Response(
-        JSON.stringify(data),
-        { 
-          status: response.status, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
+      responseData = JSON.parse(responseText);
     } catch (e) {
-      console.error("[Edge Function] Failed to make request to Crossmint API:", e);
-      return new Response(
-        JSON.stringify({ error: `Network error: ${e.message}` }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
+      responseData = { text: responseText };
     }
+    
+    // Return the response from Crossmint
+    return new Response(
+      JSON.stringify(responseData),
+      { 
+        status: response.status, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      }
+    );
   } catch (error) {
-    console.error("[Edge Function] Server error:", error);
+    console.error("[Edge Function] Error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
