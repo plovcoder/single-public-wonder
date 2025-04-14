@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,11 +8,12 @@ import FileUploader from "@/components/FileUploader";
 import MintingTable, { MintingRecord } from "@/components/MintingTable";
 import ConfigForm from "@/components/ConfigForm";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertCircle, RefreshCcw } from "lucide-react";
+import { AlertCircle, RefreshCcw, CheckSquare, Square, Check } from "lucide-react";
 
 const Index: React.FC = () => {
   const [recipients, setRecipients] = useState<string[]>([]);
   const [mintingRecords, setMintingRecords] = useState<MintingRecord[]>([]);
+  const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
   const [currentProject, setCurrentProject] = useState<{
     id?: string;
     apiKey: string;
@@ -36,6 +38,7 @@ const Index: React.FC = () => {
     }));
     
     setMintingRecords(records);
+    setSelectedRecords([]); // Clear selections
   };
   
   const handleProjectChange = (projectId?: string) => {
@@ -82,6 +85,7 @@ const Index: React.FC = () => {
           }));
           
           setMintingRecords(safeData);
+          setSelectedRecords([]); // Clear selections
         }
       }
     };
@@ -149,6 +153,7 @@ const Index: React.FC = () => {
     }));
     
     setMintingRecords(records);
+    setSelectedRecords([]); // Clear selections
     
     toast({
       title: "Recipients loaded",
@@ -156,8 +161,43 @@ const Index: React.FC = () => {
     });
   };
   
-  // Actualizada la función mintNFTs para mayor claridad en los errores
-  const mintNFTs = async () => {
+  // Handle selection of a record
+  const handleSelectRecord = (recordId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedRecords(prev => [...prev, recordId]);
+    } else {
+      setSelectedRecords(prev => prev.filter(id => id !== recordId));
+    }
+  };
+  
+  // Handle select all pending records
+  const handleSelectAllPending = () => {
+    const pendingRecordIds = mintingRecords
+      .filter(record => record.status === 'pending')
+      .map(record => record.id || '');
+    
+    // Filter out any undefined IDs
+    const validIds = pendingRecordIds.filter(id => id !== '');
+    
+    setSelectedRecords(validIds);
+    
+    toast({
+      title: "Selected all pending",
+      description: `Selected ${validIds.length} pending records`
+    });
+  };
+  
+  // Handle mint selected
+  const mintSelected = async () => {
+    if (selectedRecords.length === 0) {
+      toast({
+        title: "No records selected",
+        description: "Please select at least one record to mint",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     if (!currentProject.apiKey || !currentProject.templateId) {
       toast({
         title: "Missing configuration",
@@ -167,48 +207,39 @@ const Index: React.FC = () => {
       return;
     }
     
-    if (recipients.length === 0) {
-      toast({
-        title: "No recipients",
-        description: "Please upload a file with recipient emails or wallets",
-        variant: "destructive"
-      });
-      return;
-    }
-    
     setIsLoading(true);
     
     try {
-      // First, insert all records into the database
-      const recordsToInsert = recipients.map(recipient => ({
-        recipient,
-        status: 'pending',
-        template_id: currentProject.templateId,
-        project_id: currentProject.id
-      }));
+      // Get the selected records
+      const selectedMintingRecords = mintingRecords.filter(record => 
+        selectedRecords.includes(record.id || '') && record.status === 'pending'
+      );
       
-      const { data, error } = await supabase
-        .from('nft_mints')
-        .insert(recordsToInsert)
-        .select();
-      
-      if (error) throw error;
-      
-      // Update local state with the inserted records
-      if (data) {
-        setMintingRecords(data as MintingRecord[]);
+      if (selectedMintingRecords.length === 0) {
+        toast({
+          title: "No pending records selected",
+          description: "Please select at least one pending record to mint",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
       }
+      
+      toast({
+        title: "Minting started",
+        description: `Starting to mint ${selectedMintingRecords.length} NFTs`
+      });
       
       // Process minting in parallel with a concurrency limit
       const concurrencyLimit = 5; // Process 5 at a time
       const mintPromises = [];
       
-      for (let i = 0; i < recipients.length; i += concurrencyLimit) {
-        const batch = recipients.slice(i, i + concurrencyLimit);
+      for (let i = 0; i < selectedMintingRecords.length; i += concurrencyLimit) {
+        const batch = selectedMintingRecords.slice(i, i + concurrencyLimit);
         
-        const batchPromises = batch.map(async (recipient) => {
+        const batchPromises = batch.map(async (record) => {
           try {
-            console.log(`Calling edge function for recipient: ${recipient}`);
+            console.log(`Calling edge function for recipient: ${record.recipient}`);
             
             // Call our edge function with full URL
             const response = await fetch(
@@ -219,7 +250,7 @@ const Index: React.FC = () => {
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                  recipient,
+                  recipient: record.recipient,
                   apiKey: currentProject.apiKey,
                   templateId: currentProject.templateId,
                   blockchain: currentProject.blockchain
@@ -228,47 +259,47 @@ const Index: React.FC = () => {
             );
             
             const result = await response.json();
-            console.log(`Response for ${recipient}:`, result);
+            console.log(`Response for ${record.recipient}:`, result);
             
             // Update the record in our local state
             setMintingRecords(prevRecords => {
-              return prevRecords.map(record => {
-                if (record.recipient === recipient) {
+              return prevRecords.map(r => {
+                if (r.id === record.id) {
                   return {
-                    ...record,
+                    ...r,
                     status: response.ok ? 'minted' : 'failed',
                     error_message: !response.ok ? (result.error?.message || "Unknown error") : undefined,
                     updated_at: new Date().toISOString()
                   };
                 }
-                return record;
+                return r;
               });
             });
             
             return { 
-              recipient, 
+              recipient: record.recipient, 
               success: response.ok,
               error: !response.ok ? result.error : null
             };
           } catch (error) {
-            console.error(`Error minting for ${recipient}:`, error);
+            console.error(`Error minting for ${record.recipient}:`, error);
             
             // Update the record in our local state
             setMintingRecords(prevRecords => {
-              return prevRecords.map(record => {
-                if (record.recipient === recipient) {
+              return prevRecords.map(r => {
+                if (r.id === record.id) {
                   return {
-                    ...record,
+                    ...r,
                     status: 'failed',
                     error_message: error.message || 'Network error',
                     updated_at: new Date().toISOString()
                   };
                 }
-                return record;
+                return r;
               });
             });
             
-            return { recipient, success: false, error };
+            return { recipient: record.recipient, success: false, error };
           }
         });
         
@@ -284,6 +315,9 @@ const Index: React.FC = () => {
       // Count successes and failures
       const successCount = results.filter(r => r.success).length;
       const failureCount = results.filter(r => !r.success).length;
+      
+      // Clear selections after minting
+      setSelectedRecords([]);
       
       toast({
         title: "Minting completed",
@@ -352,7 +386,12 @@ const Index: React.FC = () => {
     );
     
     // Llamar a mintNFTs para procesar nuevamente
-    await mintNFTs();
+    const failedRecordIds = failedRecords
+      .map(record => record.id || '')
+      .filter(id => id !== '');
+    
+    setSelectedRecords(failedRecordIds);
+    await mintSelected();
   };
   
   // Nueva función para reintento individual
@@ -485,6 +524,15 @@ const Index: React.FC = () => {
     failed: mintingRecords.filter(r => r.status === 'failed').length
   };
   
+  // Check if there are pending records that can be selected
+  const hasPendingRecords = mintingStats.pending > 0;
+  
+  // Check if there are selected records that can be minted
+  const hasSelectedPendingRecords = selectedRecords.length > 0 && 
+    mintingRecords.some(r => 
+      selectedRecords.includes(r.id || '') && r.status === 'pending'
+    );
+  
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -546,30 +594,6 @@ const Index: React.FC = () => {
                 
                 <FileUploader onDataLoaded={handleDataLoaded} />
                 
-                {recipients.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm text-gray-500 mb-2">
-                      {recipients.length} recipients loaded
-                    </p>
-                    <Button 
-                      onClick={mintNFTs} 
-                      className="w-full"
-                      disabled={isLoading || !currentProject.apiKey || !currentProject.templateId}
-                    >
-                      {isLoading ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Minting in progress...
-                        </>
-                      ) : "Send NFTs"}
-                    </Button>
-                  </div>
-                )}
-                
-                {/* Botón para reintentar minteos fallidos */}
                 {mintingStats.failed > 0 && (
                   <div className="mt-2">
                     <Button 
@@ -595,32 +619,78 @@ const Index: React.FC = () => {
                   Status of your NFT minting operations for current project
                 </CardDescription>
                 {mintingRecords.length > 0 && (
-                  <div className="flex items-center justify-between text-sm mt-2">
-                    <div className="flex space-x-4">
-                      <div className="flex items-center">
-                        <span className="inline-block w-3 h-3 bg-green-500 rounded-full mr-1"></span>
-                        <span>Minted: {mintingStats.minted}</span>
+                  <div className="flex flex-col space-y-2">
+                    <div className="flex items-center justify-between text-sm mt-2">
+                      <div className="flex space-x-4">
+                        <div className="flex items-center">
+                          <span className="inline-block w-3 h-3 bg-green-500 rounded-full mr-1"></span>
+                          <span>Minted: {mintingStats.minted}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="inline-block w-3 h-3 bg-yellow-400 rounded-full mr-1"></span>
+                          <span>Pending: {mintingStats.pending}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="inline-block w-3 h-3 bg-red-500 rounded-full mr-1"></span>
+                          <span>Failed: {mintingStats.failed}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center">
-                        <span className="inline-block w-3 h-3 bg-yellow-400 rounded-full mr-1"></span>
-                        <span>Pending: {mintingStats.pending}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <span className="inline-block w-3 h-3 bg-red-500 rounded-full mr-1"></span>
-                        <span>Failed: {mintingStats.failed}</span>
-                      </div>
+                      <div>Total: {mintingStats.total}</div>
                     </div>
-                    <div>Total: {mintingStats.total}</div>
+                    
+                    {/* Buttons for select all and mint selected */}
+                    {mintingRecords.length > 0 && (
+                      <div className="flex space-x-2 mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={!hasPendingRecords || isLoading}
+                          onClick={handleSelectAllPending}
+                          className="flex-1"
+                        >
+                          <CheckSquare className="h-4 w-4 mr-2" />
+                          Select All Pending
+                        </Button>
+                        
+                        <Button
+                          variant="default"
+                          size="sm"
+                          disabled={!hasSelectedPendingRecords || isLoading}
+                          onClick={mintSelected}
+                          className="flex-1"
+                        >
+                          {isLoading ? (
+                            <>
+                              <svg className="animate-spin -ml-1 mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Minting...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-4 w-4 mr-2" />
+                              Mint Selected ({selectedRecords.length})
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardHeader>
               <CardContent>
                 {mintingRecords.length > 0 ? (
-                  <MintingTable records={mintingRecords} onRetry={handleRetryMint} />
+                  <MintingTable 
+                    records={mintingRecords} 
+                    onRetry={handleRetryMint}
+                    selectedRecords={selectedRecords}
+                    onSelectRecord={handleSelectRecord}
+                  />
                 ) : (
                   <div className="text-center p-8 text-gray-500">
                     <p>No minting operations yet</p>
-                    <p className="text-sm mt-2">Enter recipients and click "Send NFTs" to start</p>
+                    <p className="text-sm mt-2">Enter recipients and use the mint controls to start</p>
                   </div>
                 )}
               </CardContent>

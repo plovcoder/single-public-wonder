@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { RefreshCcw, AlertCircle } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export interface MintingRecord {
   id?: string;
@@ -18,10 +19,17 @@ export interface MintingRecord {
 
 interface MintingTableProps {
   records: MintingRecord[];
+  selectedRecords: string[];
   onRetry?: (record: MintingRecord) => void;
+  onSelectRecord: (recordId: string, checked: boolean) => void;
 }
 
-const MintingTable: React.FC<MintingTableProps> = ({ records, onRetry }) => {
+const MintingTable: React.FC<MintingTableProps> = ({ 
+  records, 
+  onRetry, 
+  selectedRecords,
+  onSelectRecord 
+}) => {
   if (records.length === 0) {
     return null;
   }
@@ -74,6 +82,7 @@ const MintingTable: React.FC<MintingTableProps> = ({ records, onRetry }) => {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10">Select</TableHead>
             <TableHead className="w-12">Status</TableHead>
             <TableHead>Recipient</TableHead>
             <TableHead className="hidden md:table-cell">Details</TableHead>
@@ -82,59 +91,75 @@ const MintingTable: React.FC<MintingTableProps> = ({ records, onRetry }) => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {records.map((record, index) => (
-            <TableRow key={record.id || index} className={record.status === 'failed' ? 'bg-red-50' : ''}>
-              <TableCell className="font-medium">
-                {getStatusIcon(record.status)}
-              </TableCell>
-              <TableCell title={record.recipient}>
-                {formatRecipient(record.recipient)}
-              </TableCell>
-              <TableCell className="hidden md:table-cell">
-                {record.status === 'failed' && record.error_message ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center text-red-500 cursor-help">
-                          <AlertCircle className="w-4 h-4 mr-1" />
-                          <span className="truncate max-w-[200px]">
-                            {record.error_message.substring(0, 30)}
-                            {record.error_message.length > 30 ? '...' : ''}
-                          </span>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-sm">
-                        <p>{record.error_message}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  <span className="text-gray-500">
-                    {record.status === 'minted' ? 'Successfully minted' : 
-                     record.status === 'pending' ? 'Waiting to be processed' : ''}
-                  </span>
-                )}
-              </TableCell>
-              <TableCell className="hidden md:table-cell">
-                {formatDate(record.updated_at || record.created_at)}
-              </TableCell>
-              {onRetry && (
-                <TableCell className="text-right">
-                  {record.status === 'failed' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onRetry(record)}
-                      title="Retry minting"
-                    >
-                      <RefreshCcw className="w-4 h-4 mr-1" />
-                      Retry
-                    </Button>
+          {records.map((record, index) => {
+            const recordId = record.id || `temp-${index}`;
+            const isSelected = selectedRecords.includes(recordId);
+            const isPending = record.status === 'pending';
+            
+            return (
+              <TableRow key={recordId} className={record.status === 'failed' ? 'bg-red-50' : ''}>
+                <TableCell>
+                  <Checkbox 
+                    id={`select-${recordId}`}
+                    checked={isSelected}
+                    disabled={!isPending}
+                    onCheckedChange={(checked) => {
+                      onSelectRecord(recordId, checked === true);
+                    }}
+                  />
+                </TableCell>
+                <TableCell className="font-medium">
+                  {getStatusIcon(record.status)}
+                </TableCell>
+                <TableCell title={record.recipient}>
+                  {formatRecipient(record.recipient)}
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  {record.status === 'failed' && record.error_message ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center text-red-500 cursor-help">
+                            <AlertCircle className="w-4 h-4 mr-1" />
+                            <span className="truncate max-w-[200px]">
+                              {record.error_message.substring(0, 30)}
+                              {record.error_message.length > 30 ? '...' : ''}
+                            </span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-sm">
+                          <p>{record.error_message}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <span className="text-gray-500">
+                      {record.status === 'minted' ? 'Successfully minted' : 
+                      record.status === 'pending' ? 'Waiting to be processed' : ''}
+                    </span>
                   )}
                 </TableCell>
-              )}
-            </TableRow>
-          ))}
+                <TableCell className="hidden md:table-cell">
+                  {formatDate(record.updated_at || record.created_at)}
+                </TableCell>
+                {onRetry && (
+                  <TableCell className="text-right">
+                    {record.status === 'failed' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onRetry(record)}
+                        title="Retry minting"
+                      >
+                        <RefreshCcw className="w-4 h-4 mr-1" />
+                        Retry
+                      </Button>
+                    )}
+                  </TableCell>
+                )}
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
