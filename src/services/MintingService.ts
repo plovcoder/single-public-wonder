@@ -1,3 +1,4 @@
+
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
@@ -16,7 +17,15 @@ export class MintingService {
     updateRecordStatus: (recordId: string, status: 'minted' | 'failed', errorMessage?: string) => void
   ) {
     try {
-      console.log(`Calling edge function for recipient: ${record.recipient}`);
+      console.log(`Minting NFT for recipient: ${record.recipient} with template: ${project.templateId} on blockchain: ${project.blockchain}`);
+      
+      // Verify project configuration
+      if (!project.apiKey || !project.templateId) {
+        const error = "Missing API key or template ID";
+        console.error(error);
+        updateRecordStatus(record.id || '', 'failed', error);
+        return { recipient: record.recipient, success: false, error: { message: error } };
+      }
       
       // Call our edge function using Supabase client with proper authorization
       const { data, error } = await supabase.functions.invoke(
@@ -34,6 +43,7 @@ export class MintingService {
       console.log(`Response for ${record.recipient}:`, data || error);
       
       const success = !error && data?.success;
+      const errorMessage = error?.message || data?.error?.message || "Unknown error";
       
       // Update record in database if it has an ID
       if (record.id && !record.id.startsWith('temp-')) {
@@ -41,7 +51,7 @@ export class MintingService {
           .from('nft_mints')
           .update({
             status: success ? 'minted' : 'failed',
-            error_message: !success ? (error?.message || data?.error?.message || "Unknown error") : null,
+            error_message: !success ? errorMessage : null,
             updated_at: new Date().toISOString()
           })
           .eq('id', record.id);
@@ -51,7 +61,7 @@ export class MintingService {
       updateRecordStatus(
         record.id || '', 
         success ? 'minted' : 'failed', 
-        !success ? (error?.message || data?.error?.message || "Unknown error") : undefined
+        !success ? errorMessage : undefined
       );
       
       return { 

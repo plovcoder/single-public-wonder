@@ -75,23 +75,23 @@ serve(async (req) => {
       );
     }
 
-    // Validar el formato de recipient según el blockchain elegido
+    // Validate recipient format based on blockchain
     const isEmailRecipient = recipient.includes("@");
     
-    // Validación básica del formato de wallet según blockchain
+    // Basic validation of wallet format based on blockchain
     if (!isEmailRecipient) {
-      // Para blockchains EVM (Ethereum, Polygon, Chiliz)
+      // For EVM blockchains (Ethereum, Polygon, Chiliz)
       const isEVMAddress = recipient.startsWith("0x") && recipient.length >= 40;
       const isEVMBlockchain = ["ethereum-sepolia", "polygon-amoy", "chiliz"].includes(blockchain);
       
-      // Para Solana
+      // For Solana
       const isSolanaAddress = recipient.length >= 30 && !recipient.startsWith("0x");
       
       if ((isEVMBlockchain && !isEVMAddress) || (blockchain === "solana" && !isSolanaAddress)) {
         const error = `Invalid wallet format for ${blockchain}. ${isEVMBlockchain ? "Expected 0x format for EVM chains." : "Expected Solana address format."}`;
         console.error(error, { recipient, blockchain });
         
-        // Actualizar registro como fallido
+        // Update record as failed
         await supabase
           .from("nft_mints")
           .update({ 
@@ -115,7 +115,7 @@ serve(async (req) => {
       }
     }
 
-    // Updated recipient formatting logic for multiple blockchains
+    // Format recipient according to blockchain
     const recipientFormat = recipient.includes("@") 
       ? `email:${recipient}:${blockchain}` 
       : `${recipient}:${blockchain}`;
@@ -125,7 +125,7 @@ serve(async (req) => {
     console.log(`Making request to Crossmint API for blockchain: ${blockchain}`);
     console.log(`Using template ID: ${templateId}`);
     
-    // Usar API de staging de Crossmint
+    // Use Crossmint staging API
     const crossmintEndpoint = "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts";
     console.log(`Crossmint endpoint: ${crossmintEndpoint}`);
     
@@ -162,7 +162,7 @@ serve(async (req) => {
         .update({ 
           status: "minted",
           updated_at: new Date().toISOString(),
-          error_message: null // Limpiar cualquier error previo
+          error_message: null // Clear any previous errors
         })
         .eq("recipient", recipient)
         .eq("template_id", templateId);

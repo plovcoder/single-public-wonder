@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { CheckSquare, Check, Trash2 } from "lucide-react";
+import { CheckSquare, Check, Trash2, AlertCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface MintingStatsProps {
   stats: {
@@ -35,6 +36,17 @@ const MintingStats: React.FC<MintingStatsProps> = ({
   const hasSelectedRecords = selectedRecords.length > 0;
   const hasSelectedPendingRecords = hasSelectedRecords && hasPendingRecords;
   const canMint = hasSelectedRecords && currentProject.apiKey && currentProject.templateId;
+  
+  // Define why minting might be disabled
+  const getMintButtonTitle = () => {
+    if (!currentProject.apiKey || !currentProject.templateId) {
+      return "Configure API Key and Template ID first";
+    }
+    if (!hasSelectedRecords) {
+      return "Select records to mint"; 
+    }
+    return "Mint selected NFTs";
+  };
 
   return (
     <div className="flex flex-col space-y-2">
@@ -69,38 +81,67 @@ const MintingStats: React.FC<MintingStatsProps> = ({
             Select All Pending
           </Button>
           
-          <Button
-            variant="default"
-            size="sm"
-            disabled={!canMint || isLoading}
-            onClick={onMintSelected}
-            className="flex-1"
-            title={!currentProject.apiKey || !currentProject.templateId 
-              ? "Configure API Key and Template ID first"
-              : !hasSelectedRecords 
-                ? "Select records to mint" 
-                : ""}
-          >
-            {isLoading ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Minting...
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4 mr-2" />
-                Mint Selected ({selectedRecords.length})
-              </>
-            )}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex-1">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    disabled={!canMint || isLoading}
+                    onClick={onMintSelected}
+                    className="w-full"
+                  >
+                    {isLoading ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Minting...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        Mint Selected ({selectedRecords.length})
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                {!canMint ? (
+                  <div className="space-y-1">
+                    {!currentProject.apiKey && (
+                      <div className="flex items-center text-yellow-600">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        <span>Missing API Key</span>
+                      </div>
+                    )}
+                    {!currentProject.templateId && (
+                      <div className="flex items-center text-yellow-600">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        <span>Missing Template ID</span>
+                      </div>
+                    )}
+                    {!hasSelectedRecords && (
+                      <div className="flex items-center text-yellow-600">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        <span>No records selected</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p>Mint {selectedRecords.length} selected NFTs</p>
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           
           <Button
             variant="outline"
             size="sm"
-            disabled={!hasSelectedRecords}
+            disabled={!hasSelectedRecords || isLoading}
             onClick={onDeleteSelected}
             className="flex-1 text-red-500 hover:bg-red-50"
           >
