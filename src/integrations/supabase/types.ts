@@ -168,6 +168,7 @@ export type Database = {
         Row: {
           api_key: string
           blockchain: string
+          collection_id: string | null
           created_at: string
           id: string
           name: string
@@ -177,6 +178,7 @@ export type Database = {
         Insert: {
           api_key: string
           blockchain?: string
+          collection_id?: string | null
           created_at?: string
           id?: string
           name: string
@@ -186,6 +188,7 @@ export type Database = {
         Update: {
           api_key?: string
           blockchain?: string
+          collection_id?: string | null
           created_at?: string
           id?: string
           name?: string

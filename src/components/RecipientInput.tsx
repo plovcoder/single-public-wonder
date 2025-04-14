@@ -7,7 +7,7 @@ import { RefreshCcw, Upload, AlertTriangle, InfoIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { MintingProject } from "@/types/project";
+import { MintingProject } from '@/types/project';
 
 interface RecipientInputProps {
   currentProject: MintingProject;
