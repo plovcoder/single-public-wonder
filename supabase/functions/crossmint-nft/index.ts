@@ -82,103 +82,20 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
     console.log("[Edge Function] Supabase client created successfully");
 
-    // Validate blockchain value
-    const validBlockchains = ["ethereum-sepolia", "polygon-amoy", "chiliz", "solana"];
-    if (!validBlockchains.includes(blockchain)) {
-      const error = `Invalid blockchain type: ${blockchain}. Valid options are: ${validBlockchains.join(', ')}`;
-      console.error("[Edge Function] " + error);
-      
-      // Update record as failed
-      try {
-        await supabase
-          .from("nft_mints")
-          .update({ 
-            status: "failed", 
-            error_message: error,
-            updated_at: new Date().toISOString()
-          })
-          .eq("recipient", recipient)
-          .eq("template_id", templateId);
-        console.log("[Edge Function] Updated record status to failed due to invalid blockchain");
-      } catch (e) {
-        console.error("[Edge Function] Failed to update record status:", e);
-      }
-      
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: { message: error } 
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
-
-    // Validate recipient format based on blockchain
-    const isEmailRecipient = recipient.includes("@");
-    
-    // Basic validation of wallet format based on blockchain
-    if (!isEmailRecipient) {
-      // For EVM blockchains (Ethereum, Polygon, Chiliz)
-      const isEVMAddress = recipient.startsWith("0x") && recipient.length >= 40;
-      const isEVMBlockchain = ["ethereum-sepolia", "polygon-amoy", "chiliz"].includes(blockchain);
-      
-      // For Solana
-      const isSolanaAddress = recipient.length >= 30 && !recipient.startsWith("0x");
-      
-      if ((isEVMBlockchain && !isEVMAddress) || (blockchain === "solana" && !isSolanaAddress)) {
-        const error = `Invalid wallet format for ${blockchain}. ${isEVMBlockchain ? "Expected 0x format for EVM chains." : "Expected Solana address format."}`;
-        console.error("[Edge Function] " + error, { recipient, blockchain });
-        
-        // Update record as failed
-        try {
-          await supabase
-            .from("nft_mints")
-            .update({ 
-              status: "failed", 
-              error_message: error,
-              updated_at: new Date().toISOString()
-            })
-            .eq("recipient", recipient)
-            .eq("template_id", templateId);
-          console.log("[Edge Function] Updated record status to failed due to invalid recipient format");
-        } catch (e) {
-          console.error("[Edge Function] Failed to update record status:", e);
-        }
-        
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: { message: error } 
-          }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
-          }
-        );
-      }
-    }
-
-    // Format recipient according to blockchain
+    // Format recipient according to Crossmint requirements - SIMPLIFIED VERSION
     let recipientFormat;
     
+    // Basic check if it's an email or wallet
+    const isEmailRecipient = recipient.includes("@");
+    
     if (isEmailRecipient) {
-      // For email recipients - always use the email:address:blockchain format
+      // Format for email
       recipientFormat = `email:${recipient}:${blockchain}`;
       console.log(`[Edge Function] Formatted email recipient: ${recipientFormat}`);
     } else {
-      // For wallet addresses - blockchain specific formatting
-      if (blockchain === "chiliz") {
-        // For Chiliz, just use the wallet address without blockchain suffix
-        recipientFormat = recipient;
-        console.log(`[Edge Function] Using plain address for Chiliz: ${recipientFormat}`);
-      } else {
-        // For other blockchains (Ethereum, Polygon, Solana), append the blockchain
-        recipientFormat = `${recipient}:${blockchain}`;
-        console.log(`[Edge Function] Formatted wallet for ${blockchain}: ${recipientFormat}`);
-      }
+      // For wallet addresses - just pass the address as is (no formatting)
+      recipientFormat = recipient;
+      console.log(`[Edge Function] Using wallet address as-is: ${recipientFormat}`);
     }
 
     console.log(`[Edge Function] Making request to Crossmint API for blockchain: ${blockchain}`);
