@@ -2,7 +2,7 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { RefreshCcw, AlertCircle } from "lucide-react";
+import { RefreshCcw, AlertCircle, Trash2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -22,13 +22,15 @@ interface MintingTableProps {
   selectedRecords: string[];
   onRetry?: (record: MintingRecord) => void;
   onSelectRecord: (recordId: string, checked: boolean) => void;
+  onDeleteRecord?: (record: MintingRecord) => void;
 }
 
 const MintingTable: React.FC<MintingTableProps> = ({ 
   records, 
   onRetry, 
   selectedRecords,
-  onSelectRecord 
+  onSelectRecord,
+  onDeleteRecord 
 }) => {
   if (records.length === 0) {
     return null;
@@ -87,7 +89,7 @@ const MintingTable: React.FC<MintingTableProps> = ({
             <TableHead>Recipient</TableHead>
             <TableHead className="hidden md:table-cell">Details</TableHead>
             <TableHead className="hidden md:table-cell">Date</TableHead>
-            {onRetry && <TableHead className="w-24 text-right">Actions</TableHead>}
+            <TableHead className="w-24 text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -142,21 +144,30 @@ const MintingTable: React.FC<MintingTableProps> = ({
                 <TableCell className="hidden md:table-cell">
                   {formatDate(record.updated_at || record.created_at)}
                 </TableCell>
-                {onRetry && (
-                  <TableCell className="text-right">
-                    {record.status === 'failed' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onRetry(record)}
-                        title="Retry minting"
-                      >
-                        <RefreshCcw className="w-4 h-4 mr-1" />
-                        Retry
-                      </Button>
-                    )}
-                  </TableCell>
-                )}
+                <TableCell className="text-right space-x-1">
+                  {record.status === 'failed' && onRetry && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onRetry(record)}
+                      title="Retry minting"
+                    >
+                      <RefreshCcw className="w-4 h-4 mr-1" />
+                      Retry
+                    </Button>
+                  )}
+                  {onDeleteRecord && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onDeleteRecord(record)}
+                      title="Delete record"
+                      className="text-red-500 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </TableCell>
               </TableRow>
             );
           })}

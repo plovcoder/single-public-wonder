@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +7,7 @@ import FileUploader from "@/components/FileUploader";
 import MintingTable, { MintingRecord } from "@/components/MintingTable";
 import ConfigForm from "@/components/ConfigForm";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertCircle, RefreshCcw, CheckSquare, Square, Check } from "lucide-react";
+import { AlertCircle, RefreshCcw, CheckSquare, Square, Check, Trash2 } from "lucide-react";
 
 const Index: React.FC = () => {
   const [recipients, setRecipients] = useState<string[]>([]);
@@ -394,6 +393,88 @@ const Index: React.FC = () => {
     await mintSelected();
   };
   
+  // Handle deleting individual record
+  const handleDeleteRecord = async (record: MintingRecord) => {
+    try {
+      // If the record has an ID (saved in the database), delete it from Supabase
+      if (record.id) {
+        await supabase
+          .from('nft_mints')
+          .delete()
+          .eq('id', record.id);
+      }
+      
+      // Update local state to remove the record
+      setMintingRecords(prevRecords => 
+        prevRecords.filter(r => r !== record)
+      );
+      
+      // Remove from selected records if it was selected
+      setSelectedRecords(prev => 
+        prev.filter(id => id !== record.id)
+      );
+      
+      toast({
+        title: "Record deleted",
+        description: `Removed record for ${record.recipient}`
+      });
+    } catch (error) {
+      console.error('Error deleting record:', error);
+      toast({
+        title: "Error deleting record",
+        description: error.message || "Failed to delete the record",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Handle deleting multiple selected records
+  const handleDeleteSelected = async () => {
+    if (selectedRecords.length === 0) {
+      toast({
+        title: "No records selected",
+        description: "Please select at least one record to delete",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      // Delete records from database if they have IDs
+      const recordsWithIds = selectedRecords.filter(id => id && !id.startsWith('temp-'));
+      
+      if (recordsWithIds.length > 0) {
+        await supabase
+          .from('nft_mints')
+          .delete()
+          .in('id', recordsWithIds);
+      }
+      
+      // Update local state to remove the records
+      setMintingRecords(prevRecords => 
+        prevRecords.filter(record => {
+          const recordId = record.id || '';
+          return !selectedRecords.includes(recordId);
+        })
+      );
+      
+      // Clear selected records
+      setSelectedRecords([]);
+      
+      toast({
+        title: "Records deleted",
+        description: `Successfully deleted ${selectedRecords.length} records`
+      });
+    } catch (error) {
+      console.error('Error deleting records:', error);
+      toast({
+        title: "Error deleting records",
+        description: error.message || "Failed to delete the selected records",
+        variant: "destructive"
+      });
+    }
+  };
+  
   // Nueva función para reintento individual
   const handleRetryMint = async (record: MintingRecord) => {
     if (record.status !== 'failed') return;
@@ -516,7 +597,7 @@ const Index: React.FC = () => {
     }
   };
   
-  // Calcular estadísticas de minteo
+  // Calculate minting stats
   const mintingStats = {
     total: mintingRecords.length,
     minted: mintingRecords.filter(r => r.status === 'minted').length,
@@ -532,6 +613,9 @@ const Index: React.FC = () => {
     mintingRecords.some(r => 
       selectedRecords.includes(r.id || '') && r.status === 'pending'
     );
+  
+  // Check if there are any selected records
+  const hasSelectedRecords = selectedRecords.length > 0;
   
   return (
     <div className="container mx-auto py-8 px-4">
@@ -638,9 +722,9 @@ const Index: React.FC = () => {
                       <div>Total: {mintingStats.total}</div>
                     </div>
                     
-                    {/* Buttons for select all and mint selected */}
+                    {/* Buttons for selection, deletion and minting */}
                     {mintingRecords.length > 0 && (
-                      <div className="flex space-x-2 mt-2">
+                      <div className="flex flex-wrap gap-2 mt-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -674,6 +758,17 @@ const Index: React.FC = () => {
                             </>
                           )}
                         </Button>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={!hasSelectedRecords}
+                          onClick={handleDeleteSelected}
+                          className="flex-1 text-red-500 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Selected
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -682,10 +777,11 @@ const Index: React.FC = () => {
               <CardContent>
                 {mintingRecords.length > 0 ? (
                   <MintingTable 
-                    records={mintingRecords} 
+                    records={mintingRecords}
                     onRetry={handleRetryMint}
                     selectedRecords={selectedRecords}
                     onSelectRecord={handleSelectRecord}
+                    onDeleteRecord={handleDeleteRecord}
                   />
                 ) : (
                   <div className="text-center p-8 text-gray-500">
