@@ -46,6 +46,35 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Validate blockchain value
+    const validBlockchains = ["ethereum-sepolia", "polygon-amoy", "chiliz", "solana"];
+    if (!validBlockchains.includes(blockchain)) {
+      const error = `Invalid blockchain type: ${blockchain}. Valid options are: ${validBlockchains.join(', ')}`;
+      console.error(error);
+      
+      // Update record as failed
+      await supabase
+        .from("nft_mints")
+        .update({ 
+          status: "failed", 
+          error_message: error,
+          updated_at: new Date().toISOString()
+        })
+        .eq("recipient", recipient)
+        .eq("template_id", templateId);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: { message: error } 
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    }
+
     // Validar el formato de recipient según el blockchain elegido
     const isEmailRecipient = recipient.includes("@");
     
