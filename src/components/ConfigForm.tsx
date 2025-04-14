@@ -10,6 +10,7 @@ import { Trash2, Plus, Check, X, Loader2, Info } from 'lucide-react';
 import { debounce } from 'lodash';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Project } from '@/types/project';
+import ProjectConfigInput from './ProjectConfigInput';
 
 interface ConfigFormProps {
   onConfigSaved: (project: Project) => void;
@@ -402,7 +403,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
               <strong>Collection ID:</strong> Se usa en la URL del endpoint (ej: /collections/ID/nfts)
             </p>
             <p>
-              <strong>Template ID:</strong> Se envía en el body y define la metadata del NFT
+              <strong>Template ID:</strong> Define la metadata y el aspecto del NFT
             </p>
           </AlertDescription>
         </Alert>
@@ -470,76 +471,47 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="collection-id">Collection ID</Label>
-            <Input
-              id="collection-id"
-              placeholder="Enter your Collection ID (e.g. af08ba4d-927d-4d94-b3d7-cdba49e80fd8)"
-              value={currentProject.collection_id}
-              onChange={handleCollectionIdChange}
-              className={`${
-                templateValidationStatus === 'invalid' ? 'border-red-500 focus-visible:ring-red-500' : 
-                templateValidationStatus === 'valid' ? 'border-green-500 focus-visible:ring-green-500' : ''
-              }`}
-            />
-            <p className="text-xs text-muted-foreground">
-              Used in API endpoint URL: /collections/{currentProject.collection_id}/nfts
-            </p>
-          </div>
+          <ProjectConfigInput
+            id="collection-id"
+            label="Collection ID"
+            value={currentProject.collection_id}
+            onChange={handleCollectionIdChange}
+            placeholder="Enter your Collection ID (e.g. af08ba4d-927d-4d94-b3d7-cdba49e80fd8)"
+            description="Used in API endpoint URL: /collections/{currentProject.collection_id}/nfts"
+            validationStatus={templateValidationStatus}
+            error={validationError}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="template-id">Template ID</Label>
-            <div className="relative">
-              <Input
-                id="template-id"
-                placeholder="Enter your Template ID (e.g. 47bdeb30-f082-4c74-a02b-02bee1f8a49f)"
-                value={currentProject.template_id}
-                onChange={handleTemplateIdChange}
-                className={`pr-10 ${
-                  templateValidationStatus === 'invalid' ? 'border-red-500 focus-visible:ring-red-500' : 
-                  templateValidationStatus === 'valid' ? 'border-green-500 focus-visible:ring-green-500' : ''
-                }`}
-              />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                {templateValidationStatus === 'validating' && (
-                  <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />
-                )}
-                {templateValidationStatus === 'valid' && (
-                  <Check className="h-4 w-4 text-green-500" />
-                )}
-                {templateValidationStatus === 'invalid' && (
-                  <X className="h-4 w-4 text-red-500" />
-                )}
-              </div>
+          <ProjectConfigInput
+            id="template-id"
+            label="Template ID"
+            value={currentProject.template_id}
+            onChange={handleTemplateIdChange}
+            placeholder="Enter your Template ID (e.g. 47bdeb30-f082-4c74-a02b-02bee1f8a49f)"
+            description="Defines the metadata and appearance of the NFT"
+            validationStatus={templateValidationStatus}
+            error={validationError}
+          />
+
+          {templateValidationStatus === 'valid' && templateInfo.name && (
+            <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded-md">
+              <p className="text-sm font-medium text-green-800">Configuration validated successfully</p>
+              <p className="text-sm text-green-700">Template Name: {templateInfo.name}</p>
+              {templateInfo.image && (
+                <div className="mt-2">
+                  <p className="text-sm text-green-700 mb-1">NFT Preview:</p>
+                  <img 
+                    src={templateInfo.image} 
+                    alt="NFT Preview" 
+                    className="h-20 w-20 object-cover rounded-md"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Sent in request body as "templateId" to define NFT metadata
-            </p>
-
-            {templateValidationStatus === 'invalid' && validationError && (
-              <p className="text-sm text-red-500 mt-1">{validationError}</p>
-            )}
-
-            {templateValidationStatus === 'valid' && templateInfo.name && (
-              <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded-md">
-                <p className="text-sm font-medium text-green-800">Configuration validated successfully</p>
-                <p className="text-sm text-green-700">Template Name: {templateInfo.name}</p>
-                {templateInfo.image && (
-                  <div className="mt-2">
-                    <p className="text-sm text-green-700 mb-1">NFT Preview:</p>
-                    <img 
-                      src={templateInfo.image} 
-                      alt="NFT Preview" 
-                      className="h-20 w-20 object-cover rounded-md"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          )}
           
           <div className="space-y-2">
             <Label htmlFor="blockchain">Blockchain</Label>
