@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import FileUploader from "@/components/FileUploader";
-import { RefreshCcw, CheckSquare, Upload, AlertTriangle, InfoIcon } from "lucide-react";
+import { RefreshCcw, Upload, AlertTriangle, InfoIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -294,6 +294,18 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
           </p>
         </div>
       )}
+      
+      {/* Information about the difference between Collection ID and Template ID */}
+      <Alert className="bg-amber-50 border-amber-200 mb-4">
+        <InfoIcon className="h-4 w-4 text-amber-500" />
+        <AlertTitle className="text-amber-800">Importante: Collection ID vs Template ID</AlertTitle>
+        <AlertDescription className="text-amber-700 text-sm">
+          <p className="mt-1">
+            <strong>Collection ID:</strong> Se usa en la URL del endpoint (ej: /collections/ID/nfts)<br/>
+            <strong>Template ID:</strong> Se envía en el body y define la metadata del NFT
+          </p>
+        </AlertDescription>
+      </Alert>
       
       {blockchainMismatchWarning && (
         <Alert variant="destructive" className="mb-4">

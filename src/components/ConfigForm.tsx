@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Plus, Check, X, Loader2 } from 'lucide-react';
+import { Trash2, Plus, Check, X, Loader2, Info } from 'lucide-react';
 import { debounce } from 'lodash';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Project {
   id?: string;
@@ -355,6 +356,19 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
         </CardDescription>
       </CardHeader>
       <CardContent>
+        <Alert className="mb-4 bg-blue-50 border-blue-200">
+          <Info className="h-4 w-4 text-blue-500" />
+          <AlertTitle className="text-blue-700">Configuración de Crossmint</AlertTitle>
+          <AlertDescription className="text-blue-600 text-sm">
+            <p className="mt-1">
+              <strong>Collection ID:</strong> Se usa en la URL del endpoint (ej: /collections/ID/nfts)
+            </p>
+            <p>
+              <strong>Template ID:</strong> Se envía en el body y define la metadata del NFT
+            </p>
+          </AlertDescription>
+        </Alert>
+        
         {projects.length > 0 && (
           <div className="mb-4">
             <Label>Select Project</Label>
@@ -422,7 +436,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
             <Label htmlFor="collection-id">Collection ID</Label>
             <Input
               id="collection-id"
-              placeholder="Enter your Collection ID (e.g. default-polygon-amoy)"
+              placeholder="Enter your Collection ID (e.g. af08ba4d-927d-4d94-b3d7-cdba49e80fd8)"
               value={currentProject.collection_id}
               onChange={(e) => setCurrentProject(prev => ({
                 ...prev, 
@@ -430,7 +444,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
               }))}
             />
             <p className="text-xs text-muted-foreground">
-              This is the ID that appears in the Crossmint URL: collections/{currentProject.collection_id}/nfts
+              Usado en la URL: /collections/{currentProject.collection_id}/nfts (distinto del Template ID)
             </p>
           </div>
           
@@ -439,7 +453,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
             <div className="relative">
               <Input
                 id="template-id"
-                placeholder="Enter your Template ID (e.g. 9e441746-c405-490e-afb1...)"
+                placeholder="Enter your Template ID (e.g. 47bdeb30-f082-4c74-a02b-02bee1f8a49f)"
                 value={currentProject.template_id}
                 onChange={handleTemplateIdChange}
                 onBlur={handleTemplateIdBlur}
@@ -461,7 +475,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              This is the UUID that appears in the Crossmint dashboard when viewing a template
+              Se envía en el body de la petición como "templateId" (distinto del Collection ID)
             </p>
             
             {templateValidationStatus === 'invalid' && validationError && (
