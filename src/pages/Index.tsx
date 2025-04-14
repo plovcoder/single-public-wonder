@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,12 +8,14 @@ import FileUploader from "@/components/FileUploader";
 import MintingTable, { MintingRecord } from "@/components/MintingTable";
 import ConfigForm from "@/components/ConfigForm";
 import { supabase } from "@/integrations/supabase/client";
+import { AlertCircle } from "lucide-react";
 
 const Index: React.FC = () => {
   const [recipients, setRecipients] = useState<string[]>([]);
   const [mintingRecords, setMintingRecords] = useState<MintingRecord[]>([]);
   const [apiKey, setApiKey] = useState('');
   const [templateId, setTemplateId] = useState('');
+  const [blockchain, setBlockchain] = useState('chiliz');
   const [isLoading, setIsLoading] = useState(false);
   const [manualInput, setManualInput] = useState('');
   
@@ -28,9 +31,10 @@ const Index: React.FC = () => {
     setMintingRecords(records);
   };
   
-  const handleConfigSaved = (newApiKey: string, newTemplateId: string) => {
+  const handleConfigSaved = (newApiKey: string, newTemplateId: string, newBlockchain: string) => {
     setApiKey(newApiKey);
     setTemplateId(newTemplateId);
+    setBlockchain(newBlockchain);
   };
   
   const handleManualInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -146,7 +150,8 @@ const Index: React.FC = () => {
                 body: JSON.stringify({
                   recipient,
                   apiKey,
-                  templateId
+                  templateId,
+                  blockchain
                 }),
               }
             );
@@ -218,6 +223,16 @@ const Index: React.FC = () => {
     }
   };
   
+  const getBlockchainDisplayName = (chain: string) => {
+    switch (chain) {
+      case 'solana': return 'Solana';
+      case 'polygon-amoy': return 'Polygon-Amoy';
+      case 'ethereum-sepolia': return 'Ethereum-Sepolia';
+      case 'chiliz': return 'Chiliz';
+      default: return chain.charAt(0).toUpperCase() + chain.slice(1);
+    }
+  };
+  
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -240,6 +255,15 @@ const Index: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {blockchain && (
+                  <div className="flex items-center p-2 mb-4 bg-blue-50 text-blue-700 rounded-md">
+                    <AlertCircle className="h-5 w-5 mr-2" />
+                    <p className="text-sm font-medium">
+                      🔗 Minting on: {getBlockchainDisplayName(blockchain)}
+                    </p>
+                  </div>
+                )}
+                
                 <div>
                   <Textarea 
                     placeholder="Paste wallet addresses or emails (one per line or comma/space separated)" 

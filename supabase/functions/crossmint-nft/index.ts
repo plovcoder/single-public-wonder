@@ -14,9 +14,9 @@ serve(async (req) => {
   }
 
   try {
-    const { recipient, apiKey, templateId } = await req.json();
+    const { recipient, apiKey, templateId, blockchain } = await req.json();
     
-    if (!recipient || !apiKey || !templateId) {
+    if (!recipient || !apiKey || !templateId || !blockchain) {
       return new Response(
         JSON.stringify({ error: "Missing required parameters" }),
         { 
@@ -31,10 +31,10 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Updated recipient formatting logic for Chiliz blockchain
+    // Updated recipient formatting logic for multiple blockchains
     const recipientFormat = recipient.includes("@") 
-      ? `email:${recipient}:chiliz` 
-      : `${recipient}:chiliz`;
+      ? `email:${recipient}:${blockchain}` 
+      : `${recipient}:${blockchain}`;
 
     const response = await fetch(
       "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts",
