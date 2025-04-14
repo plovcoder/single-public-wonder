@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
@@ -37,17 +36,23 @@ serve(async (req) => {
     // Format the recipient address - could be email or wallet address
     let formattedRecipient;
     
-    // Handle wallet addresses for Chiliz blockchain
+    // Use the blockchain provided in the request instead of hardcoding "chiliz"
+    const chainForFormatting = blockchain || "chiliz";
+    
+    // Handle wallet addresses (starting with 0x)
     if (recipient.startsWith('0x')) {
-      formattedRecipient = `chiliz:${recipient}`;
+      formattedRecipient = `${chainForFormatting}:${recipient}`;
+      console.log(`[Edge Function] Formatted wallet address using blockchain ${chainForFormatting}`);
     } 
     // Handle email recipients
     else if (recipient.includes('@')) {
-      formattedRecipient = `email:${recipient}:chiliz`;
+      formattedRecipient = `email:${recipient}:${chainForFormatting}`;
+      console.log(`[Edge Function] Formatted email using blockchain ${chainForFormatting}`);
     }
     // Otherwise use as is (might already be formatted)
     else {
       formattedRecipient = recipient;
+      console.log(`[Edge Function] Using recipient as-is, appears to be pre-formatted`);
     }
     
     console.log(`[Edge Function] Using formatted recipient: ${formattedRecipient}`);
@@ -57,7 +62,7 @@ serve(async (req) => {
     
     console.log(`[Edge Function] Using endpoint: ${crossmintEndpoint}`);
     
-    // CRITICAL CHANGE: Include the templateId in the request body
+    // Include the templateId in the request body
     const mintPayload = {
       recipient: formattedRecipient,
       templateId: templateId  // Add templateId to the payload
