@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
@@ -33,15 +32,32 @@ serve(async (req) => {
       );
     }
 
-    // Format the recipient address for Chiliz blockchain
-    const formattedRecipient = recipient.startsWith('0x') ? `chiliz:${recipient}` : recipient;
+    // Format the recipient address - could be email or wallet address
+    let formattedRecipient;
     
-    // Crossmint staging API
-    const crossmintEndpoint = "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts";
+    // Handle wallet addresses for Chiliz blockchain
+    if (recipient.startsWith('0x')) {
+      formattedRecipient = `chiliz:${recipient}`;
+    } 
+    // Handle email recipients
+    else if (recipient.includes('@')) {
+      formattedRecipient = `email:${recipient}:chiliz`;
+    }
+    // Otherwise use as is (might already be formatted)
+    else {
+      formattedRecipient = recipient;
+    }
+    
+    console.log(`[Edge Function] Using formatted recipient: ${formattedRecipient}`);
+    
+    // Use the templateId directly as the collection ID instead of "default"
+    // According to documentation, we use the template's collection ID
+    const crossmintEndpoint = `https://staging.crossmint.com/api/2022-06-09/collections/${templateId}/nfts`;
+    
+    console.log(`[Edge Function] Using endpoint: ${crossmintEndpoint}`);
     
     const mintPayload = {
-      recipient: formattedRecipient,
-      templateId
+      recipient: formattedRecipient
     };
     
     console.log(`[Edge Function] Sending request to Crossmint:`, mintPayload);
