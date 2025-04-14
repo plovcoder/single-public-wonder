@@ -1,4 +1,3 @@
-
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
@@ -19,33 +18,30 @@ export class MintingService {
     try {
       console.log(`Calling edge function for recipient: ${record.recipient}`);
       
-      // Call our edge function with full URL
-      const response = await fetch(
-        `https://ikuviazxpqpbomfaucom.supabase.co/functions/v1/crossmint-nft`,
+      // Call our edge function using Supabase client with proper authorization
+      const { data, error } = await supabase.functions.invoke(
+        'crossmint-nft',
         {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+          body: {
             recipient: record.recipient,
             apiKey: project.apiKey,
             templateId: project.templateId,
             blockchain: project.blockchain
-          }),
+          }
         }
       );
       
-      const result = await response.json();
-      console.log(`Response for ${record.recipient}:`, result);
+      console.log(`Response for ${record.recipient}:`, data || error);
+      
+      const success = !error && data?.success;
       
       // Update record in database if it has an ID
       if (record.id && !record.id.startsWith('temp-')) {
         await supabase
           .from('nft_mints')
           .update({
-            status: response.ok ? 'minted' : 'failed',
-            error_message: !response.ok ? (result.error?.message || "Unknown error") : null,
+            status: success ? 'minted' : 'failed',
+            error_message: !success ? (error?.message || data?.error?.message || "Unknown error") : null,
             updated_at: new Date().toISOString()
           })
           .eq('id', record.id);
@@ -54,14 +50,14 @@ export class MintingService {
       // Update the local state via callback
       updateRecordStatus(
         record.id || '', 
-        response.ok ? 'minted' : 'failed', 
-        !response.ok ? (result.error?.message || "Unknown error") : undefined
+        success ? 'minted' : 'failed', 
+        !success ? (error?.message || data?.error?.message || "Unknown error") : undefined
       );
       
       return { 
         recipient: record.recipient, 
-        success: response.ok,
-        error: !response.ok ? result.error : null
+        success,
+        error: !success ? error || data?.error : null
       };
     } catch (error: any) {
       console.error(`Error minting for ${record.recipient}:`, error);

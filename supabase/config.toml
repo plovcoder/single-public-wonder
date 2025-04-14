@@ -29,5 +29,8 @@ enabled = true
 [edge-functions]
 enabled = true
 
+[functions.crossmint-nft]
+verify_jwt = false
+
 [functions.validate-template]
 verify_jwt = false

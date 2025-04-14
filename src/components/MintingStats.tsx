@@ -33,6 +33,8 @@ const MintingStats: React.FC<MintingStatsProps> = ({
   onDeleteSelected
 }) => {
   const hasSelectedRecords = selectedRecords.length > 0;
+  const hasSelectedPendingRecords = hasSelectedRecords && hasPendingRecords;
+  const canMint = hasSelectedRecords && currentProject.apiKey && currentProject.templateId;
 
   return (
     <div className="flex flex-col space-y-2">
@@ -70,9 +72,14 @@ const MintingStats: React.FC<MintingStatsProps> = ({
           <Button
             variant="default"
             size="sm"
-            disabled={selectedRecords.length === 0 || isLoading || !currentProject.apiKey || !currentProject.templateId}
+            disabled={!canMint || isLoading}
             onClick={onMintSelected}
             className="flex-1"
+            title={!currentProject.apiKey || !currentProject.templateId 
+              ? "Configure API Key and Template ID first"
+              : !hasSelectedRecords 
+                ? "Select records to mint" 
+                : ""}
           >
             {isLoading ? (
               <>
