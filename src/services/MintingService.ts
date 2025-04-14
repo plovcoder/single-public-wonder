@@ -38,6 +38,12 @@ export class MintingService {
       
       // Call our edge function using Supabase client with proper authorization
       console.log(`[MintingService] Invoking edge function 'crossmint-nft' with recipient: ${record.recipient}`);
+      console.log(`[MintingService] Request payload:`, {
+        recipient: record.recipient,
+        templateId: project.templateId,
+        blockchain: project.blockchain,
+        apiKeyProvided: !!project.apiKey,
+      });
       
       const { data, error } = await supabase.functions.invoke(
         'crossmint-nft',
@@ -55,6 +61,20 @@ export class MintingService {
       
       if (error) {
         console.error(`[MintingService] Supabase invoke error:`, error);
+        
+        // Try to extract more detailed error message if available
+        let detailedError = error.message;
+        try {
+          // Sometimes error.message might contain a JSON string with more details
+          if (typeof error.message === 'string' && error.message.includes('{')) {
+            const errorJson = JSON.parse(error.message.substring(error.message.indexOf('{')));
+            if (errorJson.error) {
+              detailedError = errorJson.error.message || errorJson.error || error.message;
+            }
+          }
+        } catch (e) {
+          console.log("[MintingService] Could not parse detailed error:", e);
+        }
       }
       
       const success = !error && data?.success;

@@ -161,10 +161,18 @@ serve(async (req) => {
       }
     }
 
-    // Format recipient according to blockchain
-    const recipientFormat = recipient.includes("@") 
-      ? `email:${recipient}:${blockchain}` 
-      : `${recipient}:${blockchain}`;
+    // Format recipient according to blockchain - FIXED FORMATTING FOR CHILIZ
+    let recipientFormat;
+    if (recipient.includes("@")) {
+      // For email recipients
+      recipientFormat = `email:${recipient}:${blockchain}`;
+    } else if (blockchain === "chiliz") {
+      // Special handling for Chiliz blockchain - don't include blockchain in the format
+      recipientFormat = recipient;
+    } else {
+      // For other blockchains
+      recipientFormat = `${recipient}:${blockchain}`;
+    }
       
     console.log(`[Edge Function] Formatted recipient for ${blockchain}: ${recipientFormat}`);
 
