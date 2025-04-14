@@ -1,12 +1,12 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import FileUploader from "@/components/FileUploader";
-import { RefreshCcw, CheckSquare, Upload } from "lucide-react";
+import { RefreshCcw, CheckSquare, Upload, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 interface RecipientInputProps {
   currentProject: {
@@ -29,9 +29,44 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
   onRetryFailedMints
 }) => {
   const [manualInput, setManualInput] = useState('');
+  const [blockchainMismatchWarning, setBlockchainMismatchWarning] = useState<string | null>(null);
 
   const handleManualInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setManualInput(e.target.value);
+    
+    // Check for potential blockchain mismatches
+    const value = e.target.value.trim();
+    if (value) {
+      // Simple check for wallet type
+      const walletAddresses = value
+        .split(/[\s,]+/)
+        .map(item => item.trim())
+        .filter(item => item.length > 0 && !item.includes('@'));
+        
+      if (walletAddresses.length > 0) {
+        const hasEVMAddresses = walletAddresses.some(addr => addr.startsWith('0x'));
+        const hasSolanaAddresses = walletAddresses.some(addr => !addr.startsWith('0x') && addr.length >= 32);
+        
+        if (hasEVMAddresses && currentProject.blockchain === 'solana') {
+          setBlockchainMismatchWarning(
+            "Warning: You're adding EVM addresses (0x...) but your template is configured for Solana. This will cause minting errors."
+          );
+        } else if (hasSolanaAddresses && 
+          (currentProject.blockchain === 'chiliz' || 
+           currentProject.blockchain === 'ethereum-sepolia' || 
+           currentProject.blockchain === 'polygon-amoy')) {
+          setBlockchainMismatchWarning(
+            `Warning: You're adding Solana addresses but your template is configured for ${currentProject.blockchain}. This will cause minting errors.`
+          );
+        } else {
+          setBlockchainMismatchWarning(null);
+        }
+      } else {
+        setBlockchainMismatchWarning(null);
+      }
+    } else {
+      setBlockchainMismatchWarning(null);
+    }
   };
 
   const processManualInput = async () => {
@@ -184,9 +219,17 @@ const RecipientInput: React.FC<RecipientInputProps> = ({
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
           <p className="text-sm font-medium">
-            🔗 Minting on: {getBlockchainDisplayName(currentProject.blockchain)}
+            🔗 Template blockchain: {getBlockchainDisplayName(currentProject.blockchain)}
           </p>
         </div>
+      )}
+      
+      {blockchainMismatchWarning && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4 mr-2" />
+          <AlertTitle>Blockchain Mismatch</AlertTitle>
+          <AlertDescription>{blockchainMismatchWarning}</AlertDescription>
+        </Alert>
       )}
       
       <div>

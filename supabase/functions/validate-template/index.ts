@@ -62,6 +62,17 @@ serve(async (req) => {
     try {
       data = await response.json();
       console.log('[Validate Template] Response data:', data);
+      
+      // Add helper properties about blockchain compatibility
+      if (response.ok && data.chain) {
+        const chain = data.chain.toLowerCase();
+        data.compatibleWallets = {
+          isEVM: chain.includes('ethereum') || chain.includes('polygon') || chain.includes('chiliz'),
+          isSolana: chain.includes('solana'),
+          requiresFormat: chain,
+          walletPrefix: chain.includes('solana') ? 'Solana addresses' : 'EVM addresses (0x...)'
+        };
+      }
     } catch (e) {
       console.error('[Validate Template] Failed to parse response:', e);
       

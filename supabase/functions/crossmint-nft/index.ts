@@ -121,6 +121,52 @@ serve(async (req) => {
           chain: templateData.chain,
           status: templateData.status
         });
+        
+        // Check if wallet format matches template blockchain
+        if (!isEmailRecipient) {
+          const isEVMAddress = recipient.startsWith('0x');
+          const isSolanaAddress = !isEVMAddress && recipient.length >= 32;
+          
+          // Validate wallet type against template blockchain
+          if (templateData.chain?.toLowerCase().includes('solana') && isEVMAddress) {
+            console.error(`[Edge Function] Blockchain mismatch: Template is for Solana but received EVM address ${recipient}`);
+            return new Response(
+              JSON.stringify({ 
+                error: "Blockchain mismatch", 
+                message: "The Template ID is for Solana blockchain, but an EVM address (0x...) was provided. Please use a Solana wallet address or create a new Template for EVM chains.",
+                details: {
+                  templateChain: templateData.chain,
+                  recipientType: "EVM address"
+                }
+              }),
+              { 
+                status: 400, 
+                headers: { ...corsHeaders, "Content-Type": "application/json" } 
+              }
+            );
+          }
+          
+          if ((templateData.chain?.toLowerCase().includes('ethereum') || 
+               templateData.chain?.toLowerCase().includes('polygon') ||
+               templateData.chain?.toLowerCase().includes('chiliz')) && 
+              isSolanaAddress) {
+            console.error(`[Edge Function] Blockchain mismatch: Template is for EVM chain but received Solana address ${recipient}`);
+            return new Response(
+              JSON.stringify({ 
+                error: "Blockchain mismatch", 
+                message: `The Template ID is for ${templateData.chain} blockchain, but a Solana address was provided. Please use an EVM wallet address (0x...) or create a new Template for Solana.`,
+                details: {
+                  templateChain: templateData.chain,
+                  recipientType: "Solana address"
+                }
+              }),
+              { 
+                status: 400, 
+                headers: { ...corsHeaders, "Content-Type": "application/json" } 
+              }
+            );
+          }
+        }
       } else {
         console.error(`[Edge Function] Failed to validate template: ${templateId}`, await templateResponse.text());
       }
@@ -248,13 +294,21 @@ serve(async (req) => {
       console.error(`[Edge Function] Minting failed for ${recipient}. Error:`, errorMessage);
       console.error("[Edge Function] Full error response:", JSON.stringify(data));
       
+      // Add user-friendly message for common errors
+      let userFriendlyMessage = errorMessage;
+      if (errorMessage.includes("Invalid solana address")) {
+        userFriendlyMessage = `Blockchain mismatch: The template (${templateData?.name || templateId}) is configured for Solana blockchain, but you're trying to mint to an EVM address (${recipient}). Please create a new template for EVM chains or use a Solana wallet.`;
+      } else if (errorMessage.includes("is not a valid ethereum")) {
+        userFriendlyMessage = `Blockchain mismatch: The template (${templateData?.name || templateId}) is configured for an EVM blockchain, but you're trying to mint to a non-EVM address (${recipient}). Please create a new template for the correct blockchain or use an appropriate wallet.`;
+      }
+      
       // Update record as failed with detailed error message
       try {
         const { error } = await supabase
           .from("nft_mints")
           .update({ 
             status: "failed", 
-            error_message: errorMessage,
+            error_message: userFriendlyMessage,
             updated_at: new Date().toISOString()
           })
           .eq("recipient", recipient)
@@ -273,7 +327,8 @@ serve(async (req) => {
         JSON.stringify({ 
           success: false, 
           error: {
-            message: errorMessage,
+            message: userFriendlyMessage,
+            originalError: errorMessage,
             details: data
           },
           mintingDetails: {
