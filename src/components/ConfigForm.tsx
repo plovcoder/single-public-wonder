@@ -64,12 +64,25 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
     }
   };
   
-  const handleProjectSelect = (projectId: string) => {
-    const selectedProject = projects.find(p => p.id === projectId);
+  const handleProjectSelect = (value: string) => {
+    // Si se selecciona "new", activar modo de creación de proyecto
+    if (value === "new") {
+      setIsAddingProject(true);
+      setCurrentProject({
+        name: '',
+        api_key: '',
+        template_id: '',
+        blockchain: 'chiliz'
+      });
+      return;
+    }
+    
+    const selectedProject = projects.find(p => p.id === value);
     if (selectedProject) {
-      setSelectedProjectId(projectId);
+      setSelectedProjectId(value);
       setCurrentProject(selectedProject);
-      onProjectChange(projectId);
+      onProjectChange(value);
+      setIsAddingProject(false);
     }
   };
   
@@ -201,6 +214,12 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
                       {project.name}
                     </SelectItem>
                   ))}
+                  <SelectItem value="new" className="text-green-600 font-medium">
+                    <div className="flex items-center">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add New Project
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <Button 
@@ -283,9 +302,15 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
           </Button>
         </form>
         
-        {projects.length > 0 && (
+        {projects.length > 0 && !isAddingProject && (
           <div className="mt-4 text-sm text-muted-foreground">
             Current Project: {currentProject.name}
+          </div>
+        )}
+        
+        {isAddingProject && (
+          <div className="mt-4 text-sm text-blue-600 font-medium">
+            Creating new project...
           </div>
         )}
       </CardContent>
