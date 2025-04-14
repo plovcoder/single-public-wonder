@@ -37,6 +37,7 @@ serve(async (req) => {
     // Call Crossmint API to validate template
     let response;
     try {
+      // Using staging endpoint for consistency
       const endpoint = `https://staging.crossmint.com/api/2022-06-09/collections/${templateId}`;
       console.log(`[Validate Template] Calling Crossmint API: ${endpoint}`);
       

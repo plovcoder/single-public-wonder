@@ -4,7 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key, accept",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 serve(async (req) => {
@@ -99,48 +100,18 @@ serve(async (req) => {
     const crossmintEndpoint = "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts";
     console.log(`[Edge Function] Crossmint endpoint: ${crossmintEndpoint}`);
     
-    // First, validate the template to get information (but don't use for validation)
-    let templateData;
-    try {
-      console.log(`[Edge Function] Getting template info from ID: ${templateId} for reference only`);
-      const templateResponse = await fetch(
-        `https://staging.crossmint.com/api/2022-06-09/collections/${templateId}`,
-        {
-          method: "GET", 
-          headers: {
-            "x-api-key": apiKey,
-            "accept": "application/json",
-          },
-        }
-      );
-      
-      if (templateResponse.ok) {
-        templateData = await templateResponse.json();
-        console.log(`[Edge Function] Template info retrieved successfully:`, {
-          name: templateData.name,
-          chain: templateData.chain,
-          status: templateData.status
-        });
-      } else {
-        console.warn(`[Edge Function] Could not get template info: ${templateId}`, await templateResponse.text());
-        // Continue without template data - not blocking the mint
-      }
-    } catch (e) {
-      console.warn(`[Edge Function] Error getting template info:`, e);
-      // Continue without template data - not blocking the mint
-    }
+    // Prepare the payload for Crossmint - simplified!
+    // DO NOT add any validation here - Crossmint will validate address format
+    const mintPayload = {
+      recipient: recipientFormat,
+      templateId: templateId
+    };
     
+    console.log(`[Edge Function] Sending request to Crossmint with payload:`, mintPayload);
+    
+    // Send payload to Crossmint API
     let response;
     try {
-      // Prepare the payload for Crossmint - simplified!
-      const mintPayload = {
-        recipient: recipientFormat,
-        templateId: templateId
-      };
-      
-      console.log(`[Edge Function] Sending request to Crossmint with payload:`, mintPayload);
-      
-      // Send payload to Crossmint API
       response = await fetch(
         crossmintEndpoint,
         {
@@ -206,7 +177,6 @@ serve(async (req) => {
     // Update the mint record in the database
     if (response.ok) {
       console.log(`[Edge Function] Minting successful for ${recipient}`);
-      console.log(`[Edge Function] Template info:`, templateData || 'No template data available');
       
       // Find and update the mint record
       try {
@@ -236,8 +206,7 @@ serve(async (req) => {
           mintingDetails: {
             blockchain,
             recipientFormat,
-            timestamp: new Date().toISOString(),
-            templateInfo: templateData
+            timestamp: new Date().toISOString()
           }
         }),
         { 
@@ -254,9 +223,9 @@ serve(async (req) => {
       let userFriendlyMessage = errorMessage;
       
       if (errorMessage.includes("Invalid solana address") && !isEmailRecipient) {
-        userFriendlyMessage = `Blockchain mismatch: This template (${templateData?.name || templateId}) is for the Solana blockchain, but you provided an EVM address (${recipient}). Please use a Solana wallet address or create a new template for EVM chains.`;
+        userFriendlyMessage = `Blockchain mismatch: This template is for the Solana blockchain, but you provided an EVM address (${recipient}). Please use a Solana wallet address or create a new template for EVM chains.`;
       } else if (errorMessage.includes("is not a valid ethereum") && !isEmailRecipient) {
-        userFriendlyMessage = `Blockchain mismatch: This template (${templateData?.name || templateId}) is for an EVM blockchain, but you provided a non-EVM address (${recipient}). Please use an EVM wallet address (0x...) or create a new template for the appropriate blockchain.`;
+        userFriendlyMessage = `Blockchain mismatch: This template is for an EVM blockchain, but you provided a non-EVM address (${recipient}). Please use an EVM wallet address (0x...) or create a new template for the appropriate blockchain.`;
       }
       
       // Update record as failed with detailed error message
@@ -291,8 +260,7 @@ serve(async (req) => {
           mintingDetails: {
             blockchain,
             recipientFormat,
-            timestamp: new Date().toISOString(),
-            templateInfo: templateData
+            timestamp: new Date().toISOString()
           }
         }),
         { 
