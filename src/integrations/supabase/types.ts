@@ -125,6 +125,8 @@ export type Database = {
           created_at: string | null
           error_message: string | null
           id: string
+          mint_date: string
+          project_id: string | null
           recipient: string
           status: string
           template_id: string
@@ -134,6 +136,8 @@ export type Database = {
           created_at?: string | null
           error_message?: string | null
           id?: string
+          mint_date?: string
+          project_id?: string | null
           recipient: string
           status?: string
           template_id: string
@@ -143,10 +147,50 @@ export type Database = {
           created_at?: string | null
           error_message?: string | null
           id?: string
+          mint_date?: string
+          project_id?: string | null
           recipient?: string
           status?: string
           template_id?: string
           updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nft_mints_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "nft_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nft_projects: {
+        Row: {
+          api_key: string
+          blockchain: string
+          created_at: string
+          id: string
+          name: string
+          template_id: string
+          updated_at: string
+        }
+        Insert: {
+          api_key: string
+          blockchain?: string
+          created_at?: string
+          id?: string
+          name: string
+          template_id: string
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string
+          blockchain?: string
+          created_at?: string
+          id?: string
+          name?: string
+          template_id?: string
+          updated_at?: string
         }
         Relationships: []
       }

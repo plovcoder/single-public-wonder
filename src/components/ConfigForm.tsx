@@ -7,122 +7,264 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Trash2, Plus, Edit } from 'lucide-react';
 
-interface ConfigFormProps {
-  onConfigSaved: (apiKey: string, templateId: string, blockchain: string) => void;
+interface Project {
+  id?: string;
+  name: string;
+  api_key: string;
+  template_id: string;
+  blockchain: string;
 }
 
-const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved }) => {
-  const [apiKey, setApiKey] = useState('');
-  const [templateId, setTemplateId] = useState('');
-  const [blockchain, setBlockchain] = useState('chiliz');
-  const [loading, setLoading] = useState(false);
+interface ConfigFormProps {
+  onConfigSaved: (project: Project) => void;
+  onProjectChange: (projectId?: string) => void;
+}
+
+const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange }) => {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>();
+  const [isAddingProject, setIsAddingProject] = useState(false);
+  const [currentProject, setCurrentProject] = useState<Project>({
+    name: '',
+    api_key: '',
+    template_id: '',
+    blockchain: 'chiliz'
+  });
   
-  // Try to load existing config from database
   useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('nft_config')
-          .select('*')
-          .limit(1);
-          
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          setApiKey(data[0].api_key || '');
-          setTemplateId(data[0].template_id || '');
-          setBlockchain(data[0].blockchain || 'chiliz');
-          // Automatically pass the config up
-          onConfigSaved(data[0].api_key, data[0].template_id, data[0].blockchain || 'chiliz');
-        }
-      } catch (error) {
-        console.error('Error fetching config:', error);
+    fetchProjects();
+  }, []);
+  
+  const fetchProjects = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('nft_projects')
+        .select('*')
+        .order('created_at');
+      
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setProjects(data);
+        // Select the first project by default
+        const firstProjectId = data[0].id;
+        setSelectedProjectId(firstProjectId);
+        onProjectChange(firstProjectId);
+        setCurrentProject(data[0]);
       }
-    };
-    
-    fetchConfig();
-  }, [onConfigSaved]);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      toast({
+        title: "Error fetching projects",
+        description: "Could not load existing projects",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  const handleProjectSelect = (projectId: string) => {
+    const selectedProject = projects.find(p => p.id === projectId);
+    if (selectedProject) {
+      setSelectedProjectId(projectId);
+      setCurrentProject(selectedProject);
+      onProjectChange(projectId);
+    }
+  };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!apiKey || !templateId) {
+    if (!currentProject.name || !currentProject.api_key || !currentProject.template_id) {
       toast({
         title: "Missing information",
-        description: "Please enter both API Key and Template ID",
+        description: "Please fill in all project details",
         variant: "destructive"
       });
       return;
     }
     
-    setLoading(true);
-    
     try {
-      // Try to update existing record first
-      const { data, error } = await supabase
-        .from('nft_config')
-        .upsert({
-          api_key: apiKey,
-          template_id: templateId,
-          blockchain: blockchain,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'template_id' });
+      let result;
+      if (currentProject.id) {
+        // Update existing project
+        result = await supabase
+          .from('nft_projects')
+          .update({
+            name: currentProject.name,
+            api_key: currentProject.api_key,
+            template_id: currentProject.template_id,
+            blockchain: currentProject.blockchain
+          })
+          .eq('id', currentProject.id)
+          .select();
+      } else {
+        // Create new project
+        result = await supabase
+          .from('nft_projects')
+          .insert({
+            name: currentProject.name,
+            api_key: currentProject.api_key,
+            template_id: currentProject.template_id,
+            blockchain: currentProject.blockchain
+          })
+          .select();
+      }
+      
+      const { data, error } = result;
       
       if (error) throw error;
       
-      toast({
-        title: "Configuration saved",
-        description: "Your API key, template ID, and blockchain have been saved"
-      });
-      
-      onConfigSaved(apiKey, templateId, blockchain);
+      if (data) {
+        const savedProject = data[0];
+        onConfigSaved(savedProject);
+        
+        // Refresh projects list
+        fetchProjects();
+        
+        // Reset form
+        setCurrentProject({
+          name: '',
+          api_key: '',
+          template_id: '',
+          blockchain: 'chiliz'
+        });
+        setIsAddingProject(false);
+        
+        toast({
+          title: "Project saved",
+          description: `${savedProject.name} has been saved successfully`
+        });
+      }
     } catch (error) {
-      console.error('Error saving config:', error);
+      console.error('Error saving project:', error);
       toast({
-        title: "Error saving configuration",
-        description: "There was an error saving your configuration",
+        title: "Error saving project",
+        description: "Could not save project details",
         variant: "destructive"
       });
-    } finally {
-      setLoading(false);
+    }
+  };
+  
+  const handleDeleteProject = async () => {
+    if (!selectedProjectId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('nft_projects')
+        .delete()
+        .eq('id', selectedProjectId);
+      
+      if (error) throw error;
+      
+      // Refresh projects list
+      await fetchProjects();
+      
+      toast({
+        title: "Project deleted",
+        description: "The project has been removed"
+      });
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast({
+        title: "Error deleting project",
+        description: "Could not delete the project",
+        variant: "destructive"
+      });
     }
   };
   
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Crossmint Configuration</CardTitle>
+        <CardTitle>NFT Projects</CardTitle>
         <CardDescription>
-          Enter your Crossmint API Key, Template ID, and select a blockchain
+          Manage your NFT minting projects
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {projects.length > 0 && (
+          <div className="mb-4">
+            <Label>Select Project</Label>
+            <div className="flex items-center space-x-2">
+              <Select 
+                value={selectedProjectId} 
+                onValueChange={handleProjectSelect}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map(project => (
+                    <SelectItem key={project.id} value={project.id || ''}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button 
+                variant="destructive" 
+                size="icon" 
+                onClick={handleDeleteProject}
+                disabled={projects.length <= 1}
+                title="Delete Project"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="api-key">API Key</Label>
+            <Label htmlFor="project-name">Project Name</Label>
+            <Input
+              id="project-name"
+              placeholder="Enter project name (e.g. Boca Juniors)"
+              value={currentProject.name}
+              onChange={(e) => setCurrentProject(prev => ({
+                ...prev, 
+                name: e.target.value
+              }))}
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="api-key">Crossmint API Key</Label>
             <Input
               id="api-key"
               type="password"
               placeholder="Enter your Crossmint API Key"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              value={currentProject.api_key}
+              onChange={(e) => setCurrentProject(prev => ({
+                ...prev, 
+                api_key: e.target.value
+              }))}
             />
           </div>
+          
           <div className="space-y-2">
             <Label htmlFor="template-id">Template ID</Label>
             <Input
               id="template-id"
               placeholder="Enter your Template ID"
-              value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
+              value={currentProject.template_id}
+              onChange={(e) => setCurrentProject(prev => ({
+                ...prev, 
+                template_id: e.target.value
+              }))}
             />
           </div>
+          
           <div className="space-y-2">
             <Label htmlFor="blockchain">Blockchain</Label>
             <Select 
-              value={blockchain} 
-              onValueChange={setBlockchain}
+              value={currentProject.blockchain} 
+              onValueChange={(value) => setCurrentProject(prev => ({
+                ...prev, 
+                blockchain: value
+              }))}
             >
               <SelectTrigger id="blockchain">
                 <SelectValue placeholder="Select blockchain" />
@@ -135,10 +277,17 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved }) => {
               </SelectContent>
             </Select>
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Saving..." : "Save Configuration"}
+          
+          <Button type="submit" className="w-full">
+            {currentProject.id ? 'Update Project' : 'Create Project'}
           </Button>
         </form>
+        
+        {projects.length > 0 && (
+          <div className="mt-4 text-sm text-muted-foreground">
+            Current Project: {currentProject.name}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

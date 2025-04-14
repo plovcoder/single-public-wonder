@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,9 +13,16 @@ import { AlertCircle } from "lucide-react";
 const Index: React.FC = () => {
   const [recipients, setRecipients] = useState<string[]>([]);
   const [mintingRecords, setMintingRecords] = useState<MintingRecord[]>([]);
-  const [apiKey, setApiKey] = useState('');
-  const [templateId, setTemplateId] = useState('');
-  const [blockchain, setBlockchain] = useState('chiliz');
+  const [currentProject, setCurrentProject] = useState<{
+    id?: string;
+    apiKey: string;
+    templateId: string;
+    blockchain: string;
+  }>({
+    apiKey: '',
+    templateId: '',
+    blockchain: 'chiliz'
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [manualInput, setManualInput] = useState('');
   
@@ -25,16 +32,70 @@ const Index: React.FC = () => {
     // Initialize minting records
     const records: MintingRecord[] = data.map(recipient => ({
       recipient,
-      status: 'pending'
+      status: 'pending',
+      project_id: currentProject.id
     }));
     
     setMintingRecords(records);
   };
   
-  const handleConfigSaved = (newApiKey: string, newTemplateId: string, newBlockchain: string) => {
-    setApiKey(newApiKey);
-    setTemplateId(newTemplateId);
-    setBlockchain(newBlockchain);
+  const handleProjectChange = (projectId?: string) => {
+    if (!projectId) return;
+    
+    // Fetch project details and update current project
+    const fetchProjectDetails = async () => {
+      const { data, error } = await supabase
+        .from('nft_projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching project details:', error);
+        return;
+      }
+      
+      if (data) {
+        setCurrentProject({
+          id: data.id,
+          apiKey: data.api_key,
+          templateId: data.template_id,
+          blockchain: data.blockchain
+        });
+        
+        // Fetch minting records for this project
+        const { data: mintData, error: mintError } = await supabase
+          .from('nft_mints')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false });
+        
+        if (mintError) {
+          console.error('Error fetching minting records:', mintError);
+          return;
+        }
+        
+        if (mintData) {
+          setMintingRecords(mintData);
+        }
+      }
+    };
+    
+    fetchProjectDetails();
+  };
+  
+  const handleConfigSaved = (project: { 
+    id?: string; 
+    api_key: string; 
+    template_id: string; 
+    blockchain: string 
+  }) => {
+    setCurrentProject({
+      id: project.id,
+      apiKey: project.api_key,
+      templateId: project.template_id,
+      blockchain: project.blockchain
+    });
   };
   
   const handleManualInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -78,7 +139,8 @@ const Index: React.FC = () => {
     
     const records: MintingRecord[] = validItems.map(recipient => ({
       recipient,
-      status: 'pending'
+      status: 'pending',
+      project_id: currentProject.id
     }));
     
     setMintingRecords(records);
@@ -90,10 +152,10 @@ const Index: React.FC = () => {
   };
   
   const mintNFTs = async () => {
-    if (!apiKey || !templateId) {
+    if (!currentProject.apiKey || !currentProject.templateId) {
       toast({
         title: "Missing configuration",
-        description: "Please enter your API Key and Template ID",
+        description: "Please select a project and configure its details",
         variant: "destructive"
       });
       return;
@@ -115,7 +177,8 @@ const Index: React.FC = () => {
       const recordsToInsert = recipients.map(recipient => ({
         recipient,
         status: 'pending',
-        template_id: templateId
+        template_id: currentProject.templateId,
+        project_id: currentProject.id
       }));
       
       const { data, error } = await supabase
@@ -149,9 +212,9 @@ const Index: React.FC = () => {
                 },
                 body: JSON.stringify({
                   recipient,
-                  apiKey,
-                  templateId,
-                  blockchain
+                  apiKey: currentProject.apiKey,
+                  templateId: currentProject.templateId,
+                  blockchain: currentProject.blockchain
                 }),
               }
             );
@@ -245,7 +308,10 @@ const Index: React.FC = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="space-y-8">
-            <ConfigForm onConfigSaved={handleConfigSaved} />
+            <ConfigForm 
+              onConfigSaved={handleConfigSaved}
+              onProjectChange={handleProjectChange}
+            />
             
             <Card>
               <CardHeader>
@@ -255,11 +321,11 @@ const Index: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {blockchain && (
+                {currentProject.blockchain && (
                   <div className="flex items-center p-2 mb-4 bg-blue-50 text-blue-700 rounded-md">
                     <AlertCircle className="h-5 w-5 mr-2" />
                     <p className="text-sm font-medium">
-                      🔗 Minting on: {getBlockchainDisplayName(blockchain)}
+                      🔗 Minting on: {getBlockchainDisplayName(currentProject.blockchain)}
                     </p>
                   </div>
                 )}
@@ -299,7 +365,7 @@ const Index: React.FC = () => {
                     <Button 
                       onClick={mintNFTs} 
                       className="w-full"
-                      disabled={isLoading || !apiKey || !templateId}
+                      disabled={isLoading || !currentProject.apiKey || !currentProject.templateId}
                     >
                       {isLoading ? (
                         <>
@@ -322,7 +388,7 @@ const Index: React.FC = () => {
               <CardHeader>
                 <CardTitle>Minting Results</CardTitle>
                 <CardDescription>
-                  Status of your NFT minting operations
+                  Status of your NFT minting operations for current project
                 </CardDescription>
               </CardHeader>
               <CardContent>

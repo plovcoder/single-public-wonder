@@ -7,6 +7,8 @@ export interface MintingRecord {
   recipient: string;
   status: 'pending' | 'minted' | 'failed';
   error_message?: string;
+  project_id?: string;
+  created_at?: string;
 }
 
 interface MintingTableProps {
@@ -49,6 +51,18 @@ const MintingTable: React.FC<MintingTableProps> = ({ records }) => {
     return recipient;
   };
 
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <div className="w-full overflow-auto border rounded-md">
       <Table>
@@ -57,6 +71,7 @@ const MintingTable: React.FC<MintingTableProps> = ({ records }) => {
             <TableHead className="w-12">Status</TableHead>
             <TableHead>Recipient</TableHead>
             <TableHead className="hidden md:table-cell">Details</TableHead>
+            <TableHead className="hidden md:table-cell">Date</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -77,6 +92,9 @@ const MintingTable: React.FC<MintingTableProps> = ({ records }) => {
                      record.status === 'pending' ? 'Waiting to be processed' : ''}
                   </span>
                 )}
+              </TableCell>
+              <TableCell className="hidden md:table-cell">
+                {formatDate(record.created_at)}
               </TableCell>
             </TableRow>
           ))}
