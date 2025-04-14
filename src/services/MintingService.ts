@@ -1,4 +1,3 @@
-
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
@@ -24,7 +23,7 @@ export class MintingService {
         apiKeyProvided: !!project.apiKey,
         supabaseConfig: {
           hasClient: !!supabase,
-          url: process.env.SUPABASE_URL || "URL not available in client" 
+          url: "Using Supabase client" 
         }
       });
       
