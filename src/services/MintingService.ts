@@ -1,3 +1,4 @@
+
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
@@ -101,8 +102,10 @@ export class MintingService {
         };
       }
       
-      // Check if the data indicates success or failure
-      const success = !error && data?.success;
+      // FIXED: Improved success detection logic for Crossmint API responses
+      // Consider it a success if we have data with an id and no explicit error,
+      // or if data.success is true. This handles both response formats.
+      const success = !error && (data?.success || (data?.id && !data?.error));
       const errorMessage = error?.message || data?.error?.message || "Unknown error";
       
       // Log detailed information

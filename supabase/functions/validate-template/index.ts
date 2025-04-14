@@ -82,15 +82,15 @@ serve(async (req) => {
             const templatesData = await templatesResponse.json();
             console.log(`[Validate Template] Templates response:`, templatesData);
             
-            // Find the specific template in the collection
-            const templateData = templatesData.find(t => t.id === templateId);
+            // Find the specific template in the collection - FIXED: use templateId instead of id
+            const templateData = templatesData.find(t => t.templateId === templateId);
             
             if (templateData) {
               console.log(`[Validate Template] Found template: ${templateId}`);
               
               // Format a response combining collection and template data
               const formattedResponse = {
-                id: templateData.id,
+                id: templateId,
                 name: templateData.metadata?.name || collectionData.metadata?.name,
                 description: templateData.metadata?.description || collectionData.metadata?.description,
                 metadata: {
@@ -175,56 +175,15 @@ serve(async (req) => {
     if (templateId) {
       console.log(`[Validate Template] Validating template directly: ${templateId}`);
       
-      // Try to get the template directly (this is a fallback and might not work depending on Crossmint's API)
-      const templateUrl = `https://staging.crossmint.com/api/2022-06-09/templates/${templateId}`;
-      console.log(`[Validate Template] Calling Crossmint API for template: ${templateUrl}`);
-      
-      const templateResponse = await fetch(
-        templateUrl,
-        {
-          method: 'GET',
-          headers: {
-            'x-api-key': apiKey,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
-        }
+      // Since the direct template endpoint doesn't work, and we need a collection to find templates,
+      // return an error if we only have a template ID without a valid collection
+      return new Response(
+        JSON.stringify({ 
+          error: true, 
+          message: "Template ID cannot be validated without a valid Collection ID. Please provide both."
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
-      
-      if (templateResponse.ok) {
-        const templateData = await templateResponse.json();
-        console.log(`[Validate Template] Template response:`, templateData);
-        
-        const formattedResponse = {
-          id: templateData.id,
-          name: templateData.metadata?.name,
-          description: templateData.metadata?.description,
-          metadata: {
-            image: templateData.metadata?.imageUrl || templateData.metadata?.image
-          },
-          chain: templateData.onChain?.chain || "unknown",
-          readableChain: getReadableChainName(templateData.onChain?.chain),
-          compatibleWallets: getCompatibleWallets(templateData.onChain?.chain)
-        };
-        
-        return new Response(
-          JSON.stringify(formattedResponse),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      } else {
-        // Template validation failed
-        console.error(`[Validate Template] Template validation failed for ${templateId}`);
-        const errorData = await templateResponse.json();
-        
-        return new Response(
-          JSON.stringify({ 
-            error: true, 
-            message: "Template ID no encontrado. Verifica que estés usando el entorno correcto.",
-            details: errorData
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-        );
-      }
     }
     
     // If we reach here, both collection and template validation failed
