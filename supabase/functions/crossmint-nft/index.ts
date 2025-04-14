@@ -31,10 +31,10 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Make request to Crossmint API
+    // Updated recipient formatting logic for Chiliz blockchain
     const recipientFormat = recipient.includes("@") 
-      ? `email:${recipient}:solana` 
-      : recipient;
+      ? `email:${recipient}:chiliz` 
+      : `${recipient}:chiliz`;
 
     const response = await fetch(
       "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts",
