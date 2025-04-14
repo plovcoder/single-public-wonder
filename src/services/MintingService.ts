@@ -23,8 +23,8 @@ export class MintingService {
         blockchain: project.blockchain,
         apiKeyProvided: !!project.apiKey,
         supabaseConfig: {
-          url: supabase.supabaseUrl,
-          hasKey: !!supabase.supabaseKey
+          hasClient: !!supabase,
+          url: process.env.SUPABASE_URL || "URL not available in client" 
         }
       });
       
