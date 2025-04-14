@@ -93,6 +93,60 @@ export type Database = {
         }
         Relationships: []
       }
+      nft_config: {
+        Row: {
+          api_key: string
+          created_at: string | null
+          id: string
+          template_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          api_key: string
+          created_at?: string | null
+          id?: string
+          template_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          api_key?: string
+          created_at?: string | null
+          id?: string
+          template_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      nft_mints: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          recipient: string
+          status: string
+          template_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          recipient: string
+          status?: string
+          template_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          recipient?: string
+          status?: string
+          template_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       settings: {
         Row: {
           created_at: string | null

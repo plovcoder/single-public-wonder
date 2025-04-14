@@ -1,1 +1,5 @@
+
 project_id = "ikuviazxpqpbomfaucom"
+
+[functions.crossmint-nft]
+verify_jwt = false
