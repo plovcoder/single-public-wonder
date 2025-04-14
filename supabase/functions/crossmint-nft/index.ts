@@ -82,21 +82,19 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
     console.log("[Edge Function] Supabase client created successfully");
 
-    // Format recipient according to Crossmint requirements - SIMPLIFIED VERSION
-    // IMPORTANT: Only format email addresses, leave wallet addresses as-is
+    // Determine if the recipient is an email or a wallet address
+    // IMPORTANT: Only format email addresses, leave wallet addresses completely as-is
     let recipientFormat;
-    
-    // Basic check if it's an email or wallet
     const isEmailRecipient = recipient.includes("@");
     
     if (isEmailRecipient) {
-      // Format for email
+      // Format for email addresses using the special Crossmint format
       recipientFormat = `email:${recipient}:${blockchain}`;
       console.log(`[Edge Function] Formatted email recipient: ${recipientFormat}`);
     } else {
-      // For wallet addresses - just pass the address as is (no formatting)
+      // For wallet addresses - pass the address as-is with NO modifications
       recipientFormat = recipient;
-      console.log(`[Edge Function] Using wallet address as-is: ${recipientFormat}`);
+      console.log(`[Edge Function] Using wallet address as-is without modifications: ${recipientFormat}`);
     }
 
     console.log(`[Edge Function] Making request to Crossmint API for blockchain: ${blockchain}`);

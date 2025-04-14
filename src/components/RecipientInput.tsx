@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import FileUploader from "@/components/FileUploader";
-import { RefreshCcw } from "lucide-react";
+import { RefreshCcw, CheckSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
 
