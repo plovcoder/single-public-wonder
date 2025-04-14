@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
@@ -58,12 +57,7 @@ serve(async (req) => {
     console.log(`[Edge Function] Using endpoint: ${crossmintEndpoint}`);
     
     const mintPayload = {
-      recipient: formattedRecipient,
-      metadata: {
-        name: "Take The Pitch 2025 NFT",
-        image: "https://utfs.io/f/54418226-096a-4f79-9c29-59df704ca8ff-pjbmsp.04.2025.png",
-        description: "NFT minted via Crossmint batch minting platform"
-      }
+      recipient: formattedRecipient
     };
     
     console.log(`[Edge Function] Sending request to Crossmint:`, mintPayload);
