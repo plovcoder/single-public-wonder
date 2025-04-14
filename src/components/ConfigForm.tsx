@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,12 +61,23 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
       if (error) throw error;
       
       if (data && data.length > 0) {
-        setProjects(data);
+        // Handle the case when data might not have collection_id (for backward compatibility)
+        const projectsWithCollectionId = data.map(project => ({
+          ...project,
+          collection_id: project.collection_id || project.template_id // Fallback to template_id if collection_id is not present
+        }));
+        
+        setProjects(projectsWithCollectionId);
         // Select the first project by default
         const firstProjectId = data[0].id;
         setSelectedProjectId(firstProjectId);
         onProjectChange(firstProjectId);
-        setCurrentProject(data[0]);
+        
+        // Set current project with the collection_id field
+        setCurrentProject({
+          ...data[0],
+          collection_id: data[0].collection_id || data[0].template_id // Fallback to template_id if collection_id is not present
+        });
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
@@ -418,7 +430,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
               }))}
             />
             <p className="text-xs text-muted-foreground">
-              This is the ID that appears in the Crossmint URL: collections/{collectionId}/nfts
+              This is the ID that appears in the Crossmint URL: collections/{currentProject.collection_id}/nfts
             </p>
           </div>
           
