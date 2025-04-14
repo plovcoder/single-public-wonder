@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
@@ -56,8 +57,10 @@ serve(async (req) => {
     
     console.log(`[Edge Function] Using endpoint: ${crossmintEndpoint}`);
     
+    // CRITICAL CHANGE: Include the templateId in the request body
     const mintPayload = {
-      recipient: formattedRecipient
+      recipient: formattedRecipient,
+      templateId: templateId  // Add templateId to the payload
     };
     
     console.log(`[Edge Function] Sending request to Crossmint:`, mintPayload);
