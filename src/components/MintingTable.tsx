@@ -23,6 +23,7 @@ interface MintingTableProps {
   onRetry?: (record: MintingRecord) => void;
   onSelectRecord: (recordId: string, checked: boolean) => void;
   onDeleteRecord?: (record: MintingRecord) => void;
+  onSelectAllPending?: () => void;
 }
 
 const MintingTable: React.FC<MintingTableProps> = ({ 
@@ -30,11 +31,15 @@ const MintingTable: React.FC<MintingTableProps> = ({
   onRetry, 
   selectedRecords,
   onSelectRecord,
-  onDeleteRecord 
+  onDeleteRecord,
+  onSelectAllPending
 }) => {
   if (records.length === 0) {
     return null;
   }
+
+  // Count pending records to enable/disable the select all button
+  const pendingRecordsCount = records.filter(record => record.status === 'pending').length;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -81,6 +86,18 @@ const MintingTable: React.FC<MintingTableProps> = ({
 
   return (
     <div className="w-full overflow-auto border rounded-md">
+      {pendingRecordsCount > 0 && onSelectAllPending && (
+        <div className="p-2 bg-gray-50 border-b flex justify-between items-center">
+          <span className="text-sm text-gray-500">{pendingRecordsCount} pending record(s)</span>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onSelectAllPending}
+          >
+            Select All Pending
+          </Button>
+        </div>
+      )}
       <Table>
         <TableHeader>
           <TableRow>
@@ -96,9 +113,6 @@ const MintingTable: React.FC<MintingTableProps> = ({
           {records.map((record, index) => {
             const recordId = record.id || `temp-${index}`;
             const isSelected = selectedRecords.includes(recordId);
-            // FIX: We were only allowing selection of pending records
-            // This was confusing because you can select a record but it wouldn't show as selected
-            // Let's change this to simply highlight the fact rather than preventing selection
             
             return (
               <TableRow key={recordId} className={record.status === 'failed' ? 'bg-red-50' : ''}>
@@ -106,7 +120,6 @@ const MintingTable: React.FC<MintingTableProps> = ({
                   <Checkbox 
                     id={`select-${recordId}`}
                     checked={isSelected}
-                    // Remove the disabled attribute for non-pending records
                     onCheckedChange={(checked) => {
                       onSelectRecord(recordId, checked === true);
                     }}
