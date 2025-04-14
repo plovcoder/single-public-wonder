@@ -609,6 +609,7 @@ const Index: React.FC = () => {
   const hasPendingRecords = mintingStats.pending > 0;
   
   // Fix: Check if there are selected records that can be minted
+  // This is where the bug is - we need to ensure we're correctly checking if ANY selected records are pending
   const hasSelectedPendingRecords = selectedRecords.length > 0 && 
     mintingRecords.some(record => 
       selectedRecords.includes(record.id || '') && record.status === 'pending'
@@ -616,6 +617,12 @@ const Index: React.FC = () => {
   
   // Check if there are any selected records
   const hasSelectedRecords = selectedRecords.length > 0;
+
+  // Debug log to help diagnose the issue
+  console.log("Selected Records:", selectedRecords);
+  console.log("Has Pending Records:", hasPendingRecords);
+  console.log("Has Selected Pending Records:", hasSelectedPendingRecords);
+  console.log("Selected Records Count:", selectedRecords.length);
   
   return (
     <div className="container mx-auto py-8 px-4">
@@ -739,7 +746,9 @@ const Index: React.FC = () => {
                         <Button
                           variant="default"
                           size="sm"
-                          disabled={!hasSelectedPendingRecords || isLoading}
+                          // FIX: This was preventing the button from being clickable
+                          // We're fixing it to enable the button whenever ANY records are selected
+                          disabled={selectedRecords.length === 0 || isLoading || !currentProject.apiKey || !currentProject.templateId}
                           onClick={mintSelected}
                           className="flex-1"
                         >
