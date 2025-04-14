@@ -31,6 +31,24 @@ const MintingTable: React.FC<MintingTableProps> = ({ records }) => {
     }
   };
 
+  const formatRecipient = (recipient: string) => {
+    // If it's an email (contains @), display first 4 chars, then ..., then domain
+    if (recipient.includes('@')) {
+      const [localPart, domain] = recipient.split('@');
+      if (localPart.length > 4) {
+        return `${localPart.substring(0, 4)}...@${domain}`;
+      }
+      return recipient;
+    }
+    
+    // If it's a wallet address, display first 6 and last 4 chars
+    if (recipient.length > 12) {
+      return `${recipient.substring(0, 6)}...${recipient.substring(recipient.length - 4)}`;
+    }
+    
+    return recipient;
+  };
+
   return (
     <div className="w-full overflow-auto border rounded-md">
       <Table>
@@ -47,7 +65,9 @@ const MintingTable: React.FC<MintingTableProps> = ({ records }) => {
               <TableCell className="font-medium">
                 {getStatusIcon(record.status)}
               </TableCell>
-              <TableCell>{record.recipient}</TableCell>
+              <TableCell title={record.recipient}>
+                {formatRecipient(record.recipient)}
+              </TableCell>
               <TableCell className="hidden md:table-cell">
                 {record.status === 'failed' && record.error_message ? (
                   <span className="text-red-500">{record.error_message}</span>

@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import FileUploader from "@/components/FileUploader";
 import MintingTable, { MintingRecord } from "@/components/MintingTable";
@@ -14,6 +14,7 @@ const Index: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [manualInput, setManualInput] = useState('');
   
   const handleDataLoaded = (data: string[]) => {
     setRecipients(data);
@@ -30,6 +31,58 @@ const Index: React.FC = () => {
   const handleConfigSaved = (newApiKey: string, newTemplateId: string) => {
     setApiKey(newApiKey);
     setTemplateId(newTemplateId);
+  };
+  
+  const handleManualInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setManualInput(e.target.value);
+  };
+  
+  const processManualInput = () => {
+    if (!manualInput.trim()) {
+      toast({
+        title: "No recipients entered",
+        description: "Please enter at least one email or wallet address",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Split by commas, newlines, or spaces and filter out empty entries
+    const items = manualInput
+      .split(/[\s,]+/)
+      .map(item => item.trim())
+      .filter(item => item.length > 0);
+    
+    // Validate each item as email or wallet address (simple validation)
+    const validItems = items.filter(item => {
+      const isEmail = item.includes('@') && item.includes('.');
+      const isWallet = item.length >= 30; // Simple check for wallet length
+      return isEmail || isWallet;
+    });
+    
+    if (validItems.length === 0) {
+      toast({
+        title: "No valid recipients found",
+        description: "Please enter valid email addresses or wallet addresses",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Set recipients and initialize minting records
+    setRecipients(validItems);
+    
+    const records: MintingRecord[] = validItems.map(recipient => ({
+      recipient,
+      status: 'pending'
+    }));
+    
+    setMintingRecords(records);
+    
+    toast({
+      title: "Recipients loaded",
+      description: `${validItems.length} recipients ready to receive NFTs`
+    });
   };
   
   const mintNFTs = async () => {
@@ -171,7 +224,7 @@ const Index: React.FC = () => {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold tracking-tight">Crossmint NFT Sender</h1>
           <p className="text-gray-500 mt-2">
-            Upload a list of emails or wallet addresses to mint and send NFTs in batch
+            Upload a list or paste addresses to mint and send NFTs in batch
           </p>
         </div>
         
@@ -181,12 +234,37 @@ const Index: React.FC = () => {
             
             <Card>
               <CardHeader>
-                <CardTitle>Upload Recipients</CardTitle>
+                <CardTitle>Enter Recipients</CardTitle>
                 <CardDescription>
-                  Upload an Excel or CSV file with emails or wallet addresses
+                  Enter email addresses or wallet addresses below, or upload a file
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div>
+                  <Textarea 
+                    placeholder="Paste wallet addresses or emails (one per line or comma/space separated)" 
+                    className="min-h-[100px]"
+                    value={manualInput}
+                    onChange={handleManualInputChange}
+                  />
+                  <Button 
+                    onClick={processManualInput} 
+                    className="mt-2 w-full"
+                    variant="secondary"
+                  >
+                    Process Recipients
+                  </Button>
+                </div>
+                
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or</span>
+                  </div>
+                </div>
+                
                 <FileUploader onDataLoaded={handleDataLoaded} />
                 
                 {recipients.length > 0 && (
@@ -229,7 +307,7 @@ const Index: React.FC = () => {
                 ) : (
                   <div className="text-center p-8 text-gray-500">
                     <p>No minting operations yet</p>
-                    <p className="text-sm mt-2">Upload a file and click "Send NFTs" to start</p>
+                    <p className="text-sm mt-2">Enter recipients and click "Send NFTs" to start</p>
                   </div>
                 )}
               </CardContent>
