@@ -5,12 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Plus, Check, X, Loader2, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { debounce } from 'lodash';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Project } from '@/types/project';
 import ProjectConfigInput from './ProjectConfigInput';
+import ProjectSelect from './ProjectSelect';
+import BlockchainSelect from './BlockchainSelect';
+import TemplateInfo from './TemplateInfo';
 
 interface ConfigFormProps {
   onConfigSaved: (project: Project) => void;
@@ -407,45 +409,14 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
             </p>
           </AlertDescription>
         </Alert>
-        
-        {projects.length > 0 && (
-          <div className="mb-4">
-            <Label>Select Project</Label>
-            <div className="flex items-center space-x-2">
-              <Select 
-                value={selectedProjectId} 
-                onValueChange={handleProjectSelect}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a project" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map(project => (
-                    <SelectItem key={project.id} value={project.id || ''}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="new" className="text-green-600 font-medium">
-                    <div className="flex items-center">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add New Project
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <Button 
-                variant="destructive" 
-                size="icon" 
-                onClick={handleDeleteProject}
-                disabled={projects.length <= 1}
-                title="Delete Project"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-        
+
+        <ProjectSelect 
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          onProjectSelect={handleProjectSelect}
+          onDeleteProject={handleDeleteProject}
+        />
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="project-name">Project Name</Label>
@@ -459,7 +430,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
               }))}
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="api-key">Crossmint API Key</Label>
             <Input
@@ -494,63 +465,33 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
           />
 
           {templateValidationStatus === 'valid' && templateInfo.name && (
-            <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded-md">
-              <p className="text-sm font-medium text-green-800">Configuration validated successfully</p>
-              <p className="text-sm text-green-700">Template Name: {templateInfo.name}</p>
-              {templateInfo.image && (
-                <div className="mt-2">
-                  <p className="text-sm text-green-700 mb-1">NFT Preview:</p>
-                  <img 
-                    src={templateInfo.image} 
-                    alt="NFT Preview" 
-                    className="h-20 w-20 object-cover rounded-md"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            <TemplateInfo 
+              name={templateInfo.name}
+              image={templateInfo.image}
+            />
           )}
-          
-          <div className="space-y-2">
-            <Label htmlFor="blockchain">Blockchain</Label>
-            <Select 
-              value={currentProject.blockchain} 
-              onValueChange={(value) => setCurrentProject(prev => ({
-                ...prev, 
-                blockchain: value
-              }))}
-              disabled={templateValidationStatus === 'valid' && !!templateInfo.blockchain}
-            >
-              <SelectTrigger id="blockchain">
-                <SelectValue placeholder="Select blockchain" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="solana">Solana</SelectItem>
-                <SelectItem value="polygon-amoy">Polygon-Amoy</SelectItem>
-                <SelectItem value="ethereum-sepolia">Ethereum-Sepolia</SelectItem>
-                <SelectItem value="chiliz">Chiliz</SelectItem>
-              </SelectContent>
-            </Select>
-            {templateValidationStatus === 'valid' && templateInfo.blockchain && (
-              <p className="text-xs text-green-600 mt-1">
-                Blockchain detectado automáticamente del template
-              </p>
-            )}
-          </div>
-          
+
+          <BlockchainSelect
+            value={currentProject.blockchain}
+            onChange={(value) => setCurrentProject(prev => ({
+              ...prev, 
+              blockchain: value
+            }))}
+            disabled={templateValidationStatus === 'valid' && !!templateInfo.blockchain}
+            detectedBlockchain={templateValidationStatus === 'valid' && templateInfo.blockchain ? templateInfo.blockchain : undefined}
+          />
+
           <Button type="submit" className="w-full" disabled={templateValidationStatus === 'invalid'}>
             {currentProject.id ? 'Update Project' : 'Create Project'}
           </Button>
         </form>
-        
+
         {projects.length > 0 && !isAddingProject && (
           <div className="mt-4 text-sm text-muted-foreground">
             Current Project: {currentProject.name}
           </div>
         )}
-        
+
         {isAddingProject && (
           <div className="mt-4 text-sm text-blue-600 font-medium">
             Creating new project...
