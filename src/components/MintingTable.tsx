@@ -1,6 +1,9 @@
 
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { RefreshCcw, AlertCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface MintingRecord {
   id?: string;
@@ -9,13 +12,16 @@ export interface MintingRecord {
   error_message?: string;
   project_id?: string;
   created_at?: string;
+  updated_at?: string;
+  template_id?: string;
 }
 
 interface MintingTableProps {
   records: MintingRecord[];
+  onRetry?: (record: MintingRecord) => void;
 }
 
-const MintingTable: React.FC<MintingTableProps> = ({ records }) => {
+const MintingTable: React.FC<MintingTableProps> = ({ records, onRetry }) => {
   if (records.length === 0) {
     return null;
   }
@@ -72,11 +78,12 @@ const MintingTable: React.FC<MintingTableProps> = ({ records }) => {
             <TableHead>Recipient</TableHead>
             <TableHead className="hidden md:table-cell">Details</TableHead>
             <TableHead className="hidden md:table-cell">Date</TableHead>
+            {onRetry && <TableHead className="w-24 text-right">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {records.map((record, index) => (
-            <TableRow key={record.id || index}>
+            <TableRow key={record.id || index} className={record.status === 'failed' ? 'bg-red-50' : ''}>
               <TableCell className="font-medium">
                 {getStatusIcon(record.status)}
               </TableCell>
@@ -85,7 +92,22 @@ const MintingTable: React.FC<MintingTableProps> = ({ records }) => {
               </TableCell>
               <TableCell className="hidden md:table-cell">
                 {record.status === 'failed' && record.error_message ? (
-                  <span className="text-red-500">{record.error_message}</span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center text-red-500 cursor-help">
+                          <AlertCircle className="w-4 h-4 mr-1" />
+                          <span className="truncate max-w-[200px]">
+                            {record.error_message.substring(0, 30)}
+                            {record.error_message.length > 30 ? '...' : ''}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-sm">
+                        <p>{record.error_message}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 ) : (
                   <span className="text-gray-500">
                     {record.status === 'minted' ? 'Successfully minted' : 
@@ -94,8 +116,23 @@ const MintingTable: React.FC<MintingTableProps> = ({ records }) => {
                 )}
               </TableCell>
               <TableCell className="hidden md:table-cell">
-                {formatDate(record.created_at)}
+                {formatDate(record.updated_at || record.created_at)}
               </TableCell>
+              {onRetry && (
+                <TableCell className="text-right">
+                  {record.status === 'failed' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onRetry(record)}
+                      title="Retry minting"
+                    >
+                      <RefreshCcw className="w-4 h-4 mr-1" />
+                      Retry
+                    </Button>
+                  )}
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

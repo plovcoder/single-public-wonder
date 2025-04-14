@@ -20,10 +20,18 @@ serve(async (req) => {
       recipient, 
       templateId, 
       blockchain,
-      apiKeyProvided: !!apiKey 
+      apiKeyProvided: !!apiKey,
+      timestampUTC: new Date().toISOString()
     });
     
     if (!recipient || !apiKey || !templateId || !blockchain) {
+      console.error("Missing required parameters:", { 
+        recipientProvided: !!recipient,
+        apiKeyProvided: !!apiKey,
+        templateIdProvided: !!templateId,
+        blockchainProvided: !!blockchain
+      });
+      
       return new Response(
         JSON.stringify({ error: "Missing required parameters" }),
         { 
@@ -38,6 +46,46 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Validar el formato de recipient según el blockchain elegido
+    const isEmailRecipient = recipient.includes("@");
+    
+    // Validación básica del formato de wallet según blockchain
+    if (!isEmailRecipient) {
+      // Para blockchains EVM (Ethereum, Polygon, Chiliz)
+      const isEVMAddress = recipient.startsWith("0x") && recipient.length >= 40;
+      const isEVMBlockchain = ["ethereum-sepolia", "polygon-amoy", "chiliz"].includes(blockchain);
+      
+      // Para Solana
+      const isSolanaAddress = recipient.length >= 30 && !recipient.startsWith("0x");
+      
+      if ((isEVMBlockchain && !isEVMAddress) || (blockchain === "solana" && !isSolanaAddress)) {
+        const error = `Invalid wallet format for ${blockchain}. ${isEVMBlockchain ? "Expected 0x format for EVM chains." : "Expected Solana address format."}`;
+        console.error(error, { recipient, blockchain });
+        
+        // Actualizar registro como fallido
+        await supabase
+          .from("nft_mints")
+          .update({ 
+            status: "failed", 
+            error_message: error,
+            updated_at: new Date().toISOString()
+          })
+          .eq("recipient", recipient)
+          .eq("template_id", templateId);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: { message: error } 
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          }
+        );
+      }
+    }
+
     // Updated recipient formatting logic for multiple blockchains
     const recipientFormat = recipient.includes("@") 
       ? `email:${recipient}:${blockchain}` 
@@ -46,8 +94,14 @@ serve(async (req) => {
     console.log(`Formatted recipient for ${blockchain}: ${recipientFormat}`);
 
     console.log(`Making request to Crossmint API for blockchain: ${blockchain}`);
+    console.log(`Using template ID: ${templateId}`);
+    
+    // Usar API de staging de Crossmint
+    const crossmintEndpoint = "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts";
+    console.log(`Crossmint endpoint: ${crossmintEndpoint}`);
+    
     const response = await fetch(
-      "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts",
+      crossmintEndpoint,
       {
         method: "POST",
         headers: {
@@ -63,7 +117,11 @@ serve(async (req) => {
     );
 
     const data = await response.json();
-    console.log("Crossmint API response:", data);
+    console.log("Crossmint API response:", {
+      status: response.status,
+      statusText: response.statusText,
+      data: JSON.stringify(data)
+    });
     
     // Update the mint record in the database
     if (response.ok) {
@@ -74,7 +132,8 @@ serve(async (req) => {
         .from("nft_mints")
         .update({ 
           status: "minted",
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          error_message: null // Limpiar cualquier error previo
         })
         .eq("recipient", recipient)
         .eq("template_id", templateId);
@@ -99,14 +158,15 @@ serve(async (req) => {
         }
       );
     } else {
-      console.error(`Minting failed for ${recipient} on ${blockchain}. Error:`, data);
+      const errorMessage = data.message || data.error?.message || "Unknown error from Crossmint API";
+      console.error(`Minting failed for ${recipient} on ${blockchain}. Error:`, errorMessage);
       
-      // Update record as failed
+      // Update record as failed with detailed error message
       const { error } = await supabase
         .from("nft_mints")
         .update({ 
           status: "failed", 
-          error_message: data.message || "Unknown error",
+          error_message: errorMessage,
           updated_at: new Date().toISOString()
         })
         .eq("recipient", recipient)
@@ -119,7 +179,10 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: data,
+          error: {
+            message: errorMessage,
+            details: data
+          },
           mintingDetails: {
             blockchain,
             recipientFormat,
@@ -136,7 +199,10 @@ serve(async (req) => {
     console.error("Server error:", error);
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        stack: error.stack
+      }),
       { 
         status: 500, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 

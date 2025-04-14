@@ -7,7 +7,7 @@ import FileUploader from "@/components/FileUploader";
 import MintingTable, { MintingRecord } from "@/components/MintingTable";
 import ConfigForm from "@/components/ConfigForm";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, RefreshCcw } from "lucide-react";
 
 const Index: React.FC = () => {
   const [recipients, setRecipients] = useState<string[]>([]);
@@ -156,6 +156,7 @@ const Index: React.FC = () => {
     });
   };
   
+  // Actualizada la función mintNFTs para mayor claridad en los errores
   const mintNFTs = async () => {
     if (!currentProject.apiKey || !currentProject.templateId) {
       toast({
@@ -207,7 +208,9 @@ const Index: React.FC = () => {
         
         const batchPromises = batch.map(async (recipient) => {
           try {
-            // Call our edge function
+            console.log(`Calling edge function for recipient: ${recipient}`);
+            
+            // Call our edge function with full URL
             const response = await fetch(
               `https://ikuviazxpqpbomfaucom.supabase.co/functions/v1/crossmint-nft`,
               {
@@ -225,6 +228,7 @@ const Index: React.FC = () => {
             );
             
             const result = await response.json();
+            console.log(`Response for ${recipient}:`, result);
             
             // Update the record in our local state
             setMintingRecords(prevRecords => {
@@ -233,14 +237,19 @@ const Index: React.FC = () => {
                   return {
                     ...record,
                     status: response.ok ? 'minted' : 'failed',
-                    error_message: !response.ok ? result.error?.message : undefined
+                    error_message: !response.ok ? (result.error?.message || "Unknown error") : undefined,
+                    updated_at: new Date().toISOString()
                   };
                 }
                 return record;
               });
             });
             
-            return { recipient, success: response.ok };
+            return { 
+              recipient, 
+              success: response.ok,
+              error: !response.ok ? result.error : null
+            };
           } catch (error) {
             console.error(`Error minting for ${recipient}:`, error);
             
@@ -251,14 +260,15 @@ const Index: React.FC = () => {
                   return {
                     ...record,
                     status: 'failed',
-                    error_message: 'Network error'
+                    error_message: error.message || 'Network error',
+                    updated_at: new Date().toISOString()
                   };
                 }
                 return record;
               });
             });
             
-            return { recipient, success: false };
+            return { recipient, success: false, error };
           }
         });
         
@@ -283,7 +293,173 @@ const Index: React.FC = () => {
       console.error('Error in minting process:', error);
       toast({
         title: "Error in minting process",
-        description: "There was an error processing your request",
+        description: error.message || "There was an error processing your request",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Nueva función para reintento de minteos fallidos
+  const retryFailedMints = async () => {
+    const failedRecords = mintingRecords.filter(record => record.status === 'failed');
+    
+    if (failedRecords.length === 0) {
+      toast({
+        title: "No failed mints",
+        description: "There are no failed mints to retry",
+      });
+      return;
+    }
+    
+    // Extraer recipients de registros fallidos
+    const failedRecipients = failedRecords.map(record => record.recipient);
+    setRecipients(failedRecipients);
+    
+    toast({
+      title: "Retrying failed mints",
+      description: `Preparing to retry ${failedRecipients.length} failed mints`
+    });
+    
+    // Actualizar registros a pending para reintentar
+    const updates = failedRecords.map(async (record) => {
+      return supabase
+        .from('nft_mints')
+        .update({ 
+          status: 'pending', 
+          error_message: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', record.id);
+    });
+    
+    await Promise.all(updates);
+    
+    // Actualizar UI
+    setMintingRecords(prevRecords => 
+      prevRecords.map(record => {
+        if (record.status === 'failed') {
+          return {
+            ...record,
+            status: 'pending',
+            error_message: null,
+            updated_at: new Date().toISOString()
+          };
+        }
+        return record;
+      })
+    );
+    
+    // Llamar a mintNFTs para procesar nuevamente
+    await mintNFTs();
+  };
+  
+  // Nueva función para reintento individual
+  const handleRetryMint = async (record: MintingRecord) => {
+    if (record.status !== 'failed') return;
+    
+    toast({
+      title: "Retrying mint",
+      description: `Retrying mint for ${record.recipient}`
+    });
+    
+    setIsLoading(true);
+    
+    try {
+      // Actualizar estado a pending
+      await supabase
+        .from('nft_mints')
+        .update({ 
+          status: 'pending', 
+          error_message: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', record.id);
+      
+      // Actualizar en UI
+      setMintingRecords(prevRecords => 
+        prevRecords.map(r => {
+          if (r.id === record.id) {
+            return {
+              ...r,
+              status: 'pending',
+              error_message: null,
+              updated_at: new Date().toISOString()
+            };
+          }
+          return r;
+        })
+      );
+      
+      // Llamar al edge function
+      const response = await fetch(
+        `https://ikuviazxpqpbomfaucom.supabase.co/functions/v1/crossmint-nft`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            recipient: record.recipient,
+            apiKey: currentProject.apiKey,
+            templateId: currentProject.templateId || record.template_id,
+            blockchain: currentProject.blockchain
+          }),
+        }
+      );
+      
+      const result = await response.json();
+      
+      // Actualizar en UI según resultado
+      setMintingRecords(prevRecords => 
+        prevRecords.map(r => {
+          if (r.id === record.id) {
+            return {
+              ...r,
+              status: response.ok ? 'minted' : 'failed',
+              error_message: !response.ok ? (result.error?.message || "Unknown error") : null,
+              updated_at: new Date().toISOString()
+            };
+          }
+          return r;
+        })
+      );
+      
+      // Mostrar toast con resultado
+      if (response.ok) {
+        toast({
+          title: "Mint successful",
+          description: `Successfully minted NFT for ${record.recipient}`
+        });
+      } else {
+        toast({
+          title: "Mint failed",
+          description: result.error?.message || "Unknown error",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error(`Error retrying mint for ${record.recipient}:`, error);
+      
+      // Actualizar en UI
+      setMintingRecords(prevRecords => 
+        prevRecords.map(r => {
+          if (r.id === record.id) {
+            return {
+              ...r,
+              status: 'failed',
+              error_message: error.message || "Network error",
+              updated_at: new Date().toISOString()
+            };
+          }
+          return r;
+        })
+      );
+      
+      toast({
+        title: "Error retrying mint",
+        description: error.message || "There was an error processing your request",
         variant: "destructive"
       });
     } finally {
@@ -299,6 +475,14 @@ const Index: React.FC = () => {
       case 'chiliz': return 'Chiliz';
       default: return chain.charAt(0).toUpperCase() + chain.slice(1);
     }
+  };
+  
+  // Calcular estadísticas de minteo
+  const mintingStats = {
+    total: mintingRecords.length,
+    minted: mintingRecords.filter(r => r.status === 'minted').length,
+    pending: mintingRecords.filter(r => r.status === 'pending').length,
+    failed: mintingRecords.filter(r => r.status === 'failed').length
   };
   
   return (
@@ -384,6 +568,21 @@ const Index: React.FC = () => {
                     </Button>
                   </div>
                 )}
+                
+                {/* Botón para reintentar minteos fallidos */}
+                {mintingStats.failed > 0 && (
+                  <div className="mt-2">
+                    <Button 
+                      onClick={retryFailedMints} 
+                      className="w-full"
+                      variant="outline"
+                      disabled={isLoading}
+                    >
+                      <RefreshCcw className="h-4 w-4 mr-2" />
+                      Retry {mintingStats.failed} Failed Mints
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -395,10 +594,29 @@ const Index: React.FC = () => {
                 <CardDescription>
                   Status of your NFT minting operations for current project
                 </CardDescription>
+                {mintingRecords.length > 0 && (
+                  <div className="flex items-center justify-between text-sm mt-2">
+                    <div className="flex space-x-4">
+                      <div className="flex items-center">
+                        <span className="inline-block w-3 h-3 bg-green-500 rounded-full mr-1"></span>
+                        <span>Minted: {mintingStats.minted}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="inline-block w-3 h-3 bg-yellow-400 rounded-full mr-1"></span>
+                        <span>Pending: {mintingStats.pending}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="inline-block w-3 h-3 bg-red-500 rounded-full mr-1"></span>
+                        <span>Failed: {mintingStats.failed}</span>
+                      </div>
+                    </div>
+                    <div>Total: {mintingStats.total}</div>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 {mintingRecords.length > 0 ? (
-                  <MintingTable records={mintingRecords} />
+                  <MintingTable records={mintingRecords} onRetry={handleRetryMint} />
                 ) : (
                   <div className="text-center p-8 text-gray-500">
                     <p>No minting operations yet</p>
