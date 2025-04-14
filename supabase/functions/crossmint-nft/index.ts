@@ -1,6 +1,5 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,7 +24,7 @@ serve(async (req) => {
     } catch (e) {
       console.error("[Edge Function] Failed to parse request body:", e);
       return new Response(
-        JSON.stringify({ error: "Invalid request body", details: e.message }),
+        JSON.stringify({ error: "Invalid request body" }),
         { 
           status: 400, 
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
@@ -33,23 +32,17 @@ serve(async (req) => {
       );
     }
     
-    const { recipient, apiKey, templateId, blockchain } = requestBody;
+    const { recipient, apiKey, templateId } = requestBody;
     
     console.log("[Edge Function] Request parameters received:", { 
       recipient, 
-      templateId, 
-      blockchain,
+      templateId,
       apiKeyProvided: !!apiKey,
       timestampUTC: new Date().toISOString()
     });
     
     if (!recipient || !apiKey || !templateId) {
-      console.error("[Edge Function] Missing required parameters:", { 
-        recipientProvided: !!recipient,
-        apiKeyProvided: !!apiKey,
-        templateIdProvided: !!templateId
-      });
-      
+      console.error("[Edge Function] Missing required parameters");
       return new Response(
         JSON.stringify({ error: "Missing required parameters" }),
         { 
@@ -59,51 +52,12 @@ serve(async (req) => {
       );
     }
 
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    
-    console.log("[Edge Function] Supabase configuration:", {
-      urlProvided: !!supabaseUrl,
-      keyProvided: !!supabaseKey,
-    });
-    
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("[Edge Function] Missing Supabase configuration");
-      return new Response(
-        JSON.stringify({ error: "Server configuration error" }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    console.log("[Edge Function] Supabase client created successfully");
-
-    // Determine if the recipient is an email or a wallet address
-    let recipientFormat;
-    const isEmailRecipient = recipient.includes("@");
-    
-    if (isEmailRecipient) {
-      // Format for email addresses using the special Crossmint format
-      recipientFormat = `email:${recipient}:${blockchain}`;
-      console.log(`[Edge Function] Formatted email recipient: ${recipientFormat}`);
-    } else {
-      // For wallet addresses - pass the address as-is with NO modifications
-      recipientFormat = recipient;
-      console.log(`[Edge Function] Using wallet address as-is without modifications: ${recipientFormat}`);
-    }
-
     // Use Crossmint staging API
     const crossmintEndpoint = "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts";
-    console.log(`[Edge Function] Crossmint endpoint: ${crossmintEndpoint}`);
     
-    // Prepare the payload for Crossmint - simplified!
-    // DO NOT add any validation here - Crossmint will validate address format
+    // Simplified payload with only the essential data
     const mintPayload = {
-      recipient: recipientFormat,
+      recipient: recipient,
       templateId: templateId
     };
     
@@ -125,162 +79,37 @@ serve(async (req) => {
         }
       );
       
-      console.log("[Edge Function] Crossmint API request sent successfully");
-      console.log("[Edge Function] Response status:", response.status, response.statusText);
+      console.log("[Edge Function] Crossmint API response status:", response.status, response.statusText);
+      
+      const data = await response.json();
+      console.log("[Edge Function] Response body:", JSON.stringify(data));
+      
+      // Return Crossmint's response directly
+      return new Response(
+        JSON.stringify(data),
+        { 
+          status: response.status, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
     } catch (e) {
       console.error("[Edge Function] Failed to make request to Crossmint API:", e);
-      
-      // Update record as failed
-      try {
-        await supabase
-          .from("nft_mints")
-          .update({ 
-            status: "failed", 
-            error_message: `Network error: ${e.message}`,
-            updated_at: new Date().toISOString()
-          })
-          .eq("recipient", recipient)
-          .eq("template_id", templateId);
-        console.log("[Edge Function] Updated record status to failed due to network error");
-      } catch (updateError) {
-        console.error("[Edge Function] Failed to update record status:", updateError);
-      }
-      
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: { message: `Network error: ${e.message}` },
-          details: e.stack
-        }),
+        JSON.stringify({ error: `Network error: ${e.message}` }),
         { 
           status: 500, 
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       );
     }
-
-    let data;
-    try {
-      data = await response.json();
-      console.log("[Edge Function] Response body:", JSON.stringify(data));
-    } catch (e) {
-      console.error("[Edge Function] Failed to parse Crossmint API response:", e);
-      data = { error: "Failed to parse response" };
-    }
-    
-    console.log("[Edge Function] Crossmint API response:", {
-      status: response.status,
-      statusText: response.statusText,
-      data: JSON.stringify(data)
-    });
-    
-    // Update the mint record in the database
-    if (response.ok) {
-      console.log(`[Edge Function] Minting successful for ${recipient}`);
-      
-      // Find and update the mint record
-      try {
-        const { error } = await supabase
-          .from("nft_mints")
-          .update({ 
-            status: "minted",
-            updated_at: new Date().toISOString(),
-            error_message: null // Clear any previous errors
-          })
-          .eq("recipient", recipient)
-          .eq("template_id", templateId);
-
-        if (error) {
-          console.error("[Edge Function] Error updating record:", error);
-        } else {
-          console.log("[Edge Function] Successfully updated record status to minted");
-        }
-      } catch (e) {
-        console.error("[Edge Function] Failed to update record:", e);
-      }
-
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          data,
-          mintingDetails: {
-            blockchain,
-            recipientFormat,
-            timestamp: new Date().toISOString()
-          }
-        }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    } else {
-      const errorMessage = data.message || (data.error?.message || data.error) || "Unknown error from Crossmint API";
-      console.error(`[Edge Function] Minting failed for ${recipient}. Error:`, errorMessage);
-      console.error("[Edge Function] Full error response:", JSON.stringify(data));
-      
-      // Create user-friendly message for blockchain mismatch errors
-      let userFriendlyMessage = errorMessage;
-      
-      if (errorMessage.includes("Invalid solana address") && !isEmailRecipient) {
-        userFriendlyMessage = `Blockchain mismatch: This template is for the Solana blockchain, but you provided an EVM address (${recipient}). Please use a Solana wallet address or create a new template for EVM chains.`;
-      } else if (errorMessage.includes("is not a valid ethereum") && !isEmailRecipient) {
-        userFriendlyMessage = `Blockchain mismatch: This template is for an EVM blockchain, but you provided a non-EVM address (${recipient}). Please use an EVM wallet address (0x...) or create a new template for the appropriate blockchain.`;
-      }
-      
-      // Update record as failed with detailed error message
-      try {
-        const { error } = await supabase
-          .from("nft_mints")
-          .update({ 
-            status: "failed", 
-            error_message: userFriendlyMessage,
-            updated_at: new Date().toISOString()
-          })
-          .eq("recipient", recipient)
-          .eq("template_id", templateId);
-
-        if (error) {
-          console.error("[Edge Function] Error updating record:", error);
-        } else {
-          console.log("[Edge Function] Successfully updated record status to failed");
-        }
-      } catch (e) {
-        console.error("[Edge Function] Failed to update record:", e);
-      }
-
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: {
-            message: userFriendlyMessage,
-            originalError: errorMessage,
-            details: data
-          },
-          mintingDetails: {
-            blockchain,
-            recipientFormat,
-            timestamp: new Date().toISOString()
-          }
-        }),
-        { 
-          status: response.status, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
   } catch (error) {
     console.error("[Edge Function] Server error:", error);
-    
     return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        stack: error.stack
-      }),
+      JSON.stringify({ error: error.message }),
       { 
         status: 500, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+      }
     );
   }
 });
