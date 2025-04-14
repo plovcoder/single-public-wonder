@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
@@ -13,11 +14,12 @@ serve(async (req) => {
 
   try {
     const requestBody = await req.json();
-    const { recipient, apiKey, templateId } = requestBody;
+    const { recipient, apiKey, templateId, blockchain } = requestBody;
     
     console.log("[Edge Function] Request received:", {
       recipient,
       templateId,
+      blockchain,
       apiKeyProvided: !!apiKey
     });
     
@@ -50,14 +52,18 @@ serve(async (req) => {
     
     console.log(`[Edge Function] Using formatted recipient: ${formattedRecipient}`);
     
-    // Use the templateId directly as the collection ID instead of "default"
-    // According to documentation, we use the template's collection ID
+    // Use the templateId directly as the collection ID
     const crossmintEndpoint = `https://staging.crossmint.com/api/2022-06-09/collections/${templateId}/nfts`;
     
     console.log(`[Edge Function] Using endpoint: ${crossmintEndpoint}`);
     
     const mintPayload = {
-      recipient: formattedRecipient
+      recipient: formattedRecipient,
+      metadata: {
+        name: "Take The Pitch 2025 NFT",
+        image: "https://utfs.io/f/54418226-096a-4f79-9c29-59df704ca8ff-pjbmsp.04.2025.png",
+        description: "NFT minted via Crossmint batch minting platform"
+      }
     };
     
     console.log(`[Edge Function] Sending request to Crossmint:`, mintPayload);
