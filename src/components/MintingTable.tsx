@@ -96,7 +96,9 @@ const MintingTable: React.FC<MintingTableProps> = ({
           {records.map((record, index) => {
             const recordId = record.id || `temp-${index}`;
             const isSelected = selectedRecords.includes(recordId);
-            const isPending = record.status === 'pending';
+            // FIX: We were only allowing selection of pending records
+            // This was confusing because you can select a record but it wouldn't show as selected
+            // Let's change this to simply highlight the fact rather than preventing selection
             
             return (
               <TableRow key={recordId} className={record.status === 'failed' ? 'bg-red-50' : ''}>
@@ -104,7 +106,7 @@ const MintingTable: React.FC<MintingTableProps> = ({
                   <Checkbox 
                     id={`select-${recordId}`}
                     checked={isSelected}
-                    disabled={!isPending}
+                    // Remove the disabled attribute for non-pending records
                     onCheckedChange={(checked) => {
                       onSelectRecord(recordId, checked === true);
                     }}

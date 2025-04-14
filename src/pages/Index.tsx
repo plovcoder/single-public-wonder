@@ -26,7 +26,58 @@ const Index: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [manualInput, setManualInput] = useState('');
   
-  const handleDataLoaded = (data: string[]) => {
+  // Load records from Supabase on initial page load
+  useEffect(() => {
+    const loadInitialRecords = async () => {
+      // Get the most recent project
+      const { data: projectData, error: projectError } = await supabase
+        .from('nft_projects')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (projectError) {
+        console.error('Error fetching most recent project:', projectError);
+        return;
+      }
+      
+      if (projectData && projectData.length > 0) {
+        const project = projectData[0];
+        setCurrentProject({
+          id: project.id,
+          apiKey: project.api_key,
+          templateId: project.template_id,
+          blockchain: project.blockchain
+        });
+        
+        // Load minting records for this project
+        const { data: mintData, error: mintError } = await supabase
+          .from('nft_mints')
+          .select('*')
+          .eq('project_id', project.id)
+          .order('created_at', { ascending: false });
+        
+        if (mintError) {
+          console.error('Error fetching minting records:', mintError);
+          return;
+        }
+        
+        if (mintData) {
+          // Safely map the data to ensure status is of correct type
+          const safeData = mintData.map((item) => ({
+            ...item,
+            status: item.status as 'pending' | 'minted' | 'failed',
+          }));
+          
+          setMintingRecords(safeData);
+        }
+      }
+    };
+    
+    loadInitialRecords();
+  }, []);
+  
+  const handleDataLoaded = async (data: string[]) => {
     setRecipients(data);
     
     // Initialize minting records
@@ -38,6 +89,36 @@ const Index: React.FC = () => {
     
     setMintingRecords(records);
     setSelectedRecords([]); // Clear selections
+    
+    // If we have a project ID, save these records to the database
+    if (currentProject.id) {
+      // Save each record to Supabase
+      const savedRecords = [];
+      
+      for (const record of records) {
+        const { data, error } = await supabase
+          .from('nft_mints')
+          .insert({
+            recipient: record.recipient,
+            status: 'pending',
+            project_id: currentProject.id,
+            template_id: currentProject.templateId
+          })
+          .select()
+          .single();
+        
+        if (error) {
+          console.error('Error saving minting record:', error);
+        } else if (data) {
+          savedRecords.push(data);
+        }
+      }
+      
+      // Update the UI with the saved records that include IDs
+      if (savedRecords.length > 0) {
+        setMintingRecords(savedRecords);
+      }
+    }
   };
   
   const handleProjectChange = (projectId?: string) => {
@@ -110,7 +191,7 @@ const Index: React.FC = () => {
     setManualInput(e.target.value);
   };
   
-  const processManualInput = () => {
+  const processManualInput = async () => {
     if (!manualInput.trim()) {
       toast({
         title: "No recipients entered",
@@ -142,16 +223,54 @@ const Index: React.FC = () => {
       return;
     }
     
-    // Set recipients and initialize minting records
+    // Set recipients
     setRecipients(validItems);
     
-    const records: MintingRecord[] = validItems.map(recipient => ({
-      recipient,
-      status: 'pending',
-      project_id: currentProject.id
-    }));
+    // Initialize records
+    const newRecords: MintingRecord[] = [];
     
-    setMintingRecords(records);
+    // If we have a project ID, save these records to the database
+    if (currentProject.id) {
+      // Save each record to Supabase
+      for (const recipient of validItems) {
+        const { data, error } = await supabase
+          .from('nft_mints')
+          .insert({
+            recipient: recipient,
+            status: 'pending',
+            project_id: currentProject.id,
+            template_id: currentProject.templateId
+          })
+          .select()
+          .single();
+        
+        if (error) {
+          console.error('Error saving minting record:', error);
+          // Still add to local state with a temporary ID
+          newRecords.push({
+            id: `temp-${Date.now()}-${recipient}`,
+            recipient,
+            status: 'pending',
+            project_id: currentProject.id
+          });
+        } else if (data) {
+          newRecords.push(data as MintingRecord);
+        }
+      }
+    } else {
+      // No project ID, just use temporary records
+      validItems.forEach((recipient, index) => {
+        newRecords.push({
+          id: `temp-${Date.now()}-${index}`,
+          recipient,
+          status: 'pending',
+          project_id: currentProject.id
+        });
+      });
+    }
+    
+    // Update the minting records state
+    setMintingRecords(newRecords);
     setSelectedRecords([]); // Clear selections
     
     toast({
@@ -211,10 +330,15 @@ const Index: React.FC = () => {
     try {
       // Get the selected records
       const selectedMintingRecords = mintingRecords.filter(record => 
-        selectedRecords.includes(record.id || '') && record.status === 'pending'
+        selectedRecords.includes(record.id || '')
       );
       
-      if (selectedMintingRecords.length === 0) {
+      // Filter to only get pending records
+      const pendingSelectedRecords = selectedMintingRecords.filter(record => 
+        record.status === 'pending'
+      );
+      
+      if (pendingSelectedRecords.length === 0) {
         toast({
           title: "No pending records selected",
           description: "Please select at least one pending record to mint",
@@ -226,15 +350,15 @@ const Index: React.FC = () => {
       
       toast({
         title: "Minting started",
-        description: `Starting to mint ${selectedMintingRecords.length} NFTs`
+        description: `Starting to mint ${pendingSelectedRecords.length} NFTs`
       });
       
       // Process minting in parallel with a concurrency limit
       const concurrencyLimit = 5; // Process 5 at a time
       const mintPromises = [];
       
-      for (let i = 0; i < selectedMintingRecords.length; i += concurrencyLimit) {
-        const batch = selectedMintingRecords.slice(i, i + concurrencyLimit);
+      for (let i = 0; i < pendingSelectedRecords.length; i += concurrencyLimit) {
+        const batch = pendingSelectedRecords.slice(i, i + concurrencyLimit);
         
         const batchPromises = batch.map(async (record) => {
           try {
@@ -260,6 +384,18 @@ const Index: React.FC = () => {
             const result = await response.json();
             console.log(`Response for ${record.recipient}:`, result);
             
+            // Update record in database if it has an ID
+            if (record.id && !record.id.startsWith('temp-')) {
+              await supabase
+                .from('nft_mints')
+                .update({
+                  status: response.ok ? 'minted' : 'failed',
+                  error_message: !response.ok ? (result.error?.message || "Unknown error") : null,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', record.id);
+            }
+            
             // Update the record in our local state
             setMintingRecords(prevRecords => {
               return prevRecords.map(r => {
@@ -282,6 +418,18 @@ const Index: React.FC = () => {
             };
           } catch (error) {
             console.error(`Error minting for ${record.recipient}:`, error);
+            
+            // Update record in database if it has an ID
+            if (record.id && !record.id.startsWith('temp-')) {
+              await supabase
+                .from('nft_mints')
+                .update({
+                  status: 'failed',
+                  error_message: error.message || 'Network error',
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', record.id);
+            }
             
             // Update the record in our local state
             setMintingRecords(prevRecords => {
@@ -391,88 +539,6 @@ const Index: React.FC = () => {
     
     setSelectedRecords(failedRecordIds);
     await mintSelected();
-  };
-  
-  // Handle deleting individual record
-  const handleDeleteRecord = async (record: MintingRecord) => {
-    try {
-      // If the record has an ID (saved in the database), delete it from Supabase
-      if (record.id) {
-        await supabase
-          .from('nft_mints')
-          .delete()
-          .eq('id', record.id);
-      }
-      
-      // Update local state to remove the record
-      setMintingRecords(prevRecords => 
-        prevRecords.filter(r => r !== record)
-      );
-      
-      // Remove from selected records if it was selected
-      setSelectedRecords(prev => 
-        prev.filter(id => id !== record.id)
-      );
-      
-      toast({
-        title: "Record deleted",
-        description: `Removed record for ${record.recipient}`
-      });
-    } catch (error) {
-      console.error('Error deleting record:', error);
-      toast({
-        title: "Error deleting record",
-        description: error.message || "Failed to delete the record",
-        variant: "destructive"
-      });
-    }
-  };
-  
-  // Handle deleting multiple selected records
-  const handleDeleteSelected = async () => {
-    if (selectedRecords.length === 0) {
-      toast({
-        title: "No records selected",
-        description: "Please select at least one record to delete",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    try {
-      // Delete records from database if they have IDs
-      const recordsWithIds = selectedRecords.filter(id => id && !id.startsWith('temp-'));
-      
-      if (recordsWithIds.length > 0) {
-        await supabase
-          .from('nft_mints')
-          .delete()
-          .in('id', recordsWithIds);
-      }
-      
-      // Update local state to remove the records
-      setMintingRecords(prevRecords => 
-        prevRecords.filter(record => {
-          const recordId = record.id || '';
-          return !selectedRecords.includes(recordId);
-        })
-      );
-      
-      // Clear selected records
-      setSelectedRecords([]);
-      
-      toast({
-        title: "Records deleted",
-        description: `Successfully deleted ${selectedRecords.length} records`
-      });
-    } catch (error) {
-      console.error('Error deleting records:', error);
-      toast({
-        title: "Error deleting records",
-        description: error.message || "Failed to delete the selected records",
-        variant: "destructive"
-      });
-    }
   };
   
   // Nueva función para reintento individual
@@ -587,6 +653,88 @@ const Index: React.FC = () => {
     }
   };
   
+  // Handle deleting individual record
+  const handleDeleteRecord = async (record: MintingRecord) => {
+    try {
+      // If the record has an ID (saved in the database), delete it from Supabase
+      if (record.id) {
+        await supabase
+          .from('nft_mints')
+          .delete()
+          .eq('id', record.id);
+      }
+      
+      // Update local state to remove the record
+      setMintingRecords(prevRecords => 
+        prevRecords.filter(r => r !== record)
+      );
+      
+      // Remove from selected records if it was selected
+      setSelectedRecords(prev => 
+        prev.filter(id => id !== record.id)
+      );
+      
+      toast({
+        title: "Record deleted",
+        description: `Removed record for ${record.recipient}`
+      });
+    } catch (error) {
+      console.error('Error deleting record:', error);
+      toast({
+        title: "Error deleting record",
+        description: error.message || "Failed to delete the record",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Handle deleting multiple selected records
+  const handleDeleteSelected = async () => {
+    if (selectedRecords.length === 0) {
+      toast({
+        title: "No records selected",
+        description: "Please select at least one record to delete",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      // Delete records from database if they have IDs
+      const recordsWithIds = selectedRecords.filter(id => id && !id.startsWith('temp-'));
+      
+      if (recordsWithIds.length > 0) {
+        await supabase
+          .from('nft_mints')
+          .delete()
+          .in('id', recordsWithIds);
+      }
+      
+      // Update local state to remove the records
+      setMintingRecords(prevRecords => 
+        prevRecords.filter(record => {
+          const recordId = record.id || '';
+          return !selectedRecords.includes(recordId);
+        })
+      );
+      
+      // Clear selected records
+      setSelectedRecords([]);
+      
+      toast({
+        title: "Records deleted",
+        description: `Successfully deleted ${selectedRecords.length} records`
+      });
+    } catch (error) {
+      console.error('Error deleting records:', error);
+      toast({
+        title: "Error deleting records",
+        description: error.message || "Failed to delete the selected records",
+        variant: "destructive"
+      });
+    }
+  };
+  
   const getBlockchainDisplayName = (chain: string) => {
     switch (chain) {
       case 'solana': return 'Solana';
@@ -608,8 +756,7 @@ const Index: React.FC = () => {
   // Check if there are pending records that can be selected
   const hasPendingRecords = mintingStats.pending > 0;
   
-  // Fix: Check if there are selected records that can be minted
-  // This is where the bug is - we need to ensure we're correctly checking if ANY selected records are pending
+  // FIXED: This logic was wrong - now we properly check if ANY selected records are pending
   const hasSelectedPendingRecords = selectedRecords.length > 0 && 
     mintingRecords.some(record => 
       selectedRecords.includes(record.id || '') && record.status === 'pending'
@@ -618,11 +765,16 @@ const Index: React.FC = () => {
   // Check if there are any selected records
   const hasSelectedRecords = selectedRecords.length > 0;
 
-  // Debug log to help diagnose the issue
+  // Add more logging to help diagnose issues
   console.log("Selected Records:", selectedRecords);
   console.log("Has Pending Records:", hasPendingRecords);
   console.log("Has Selected Pending Records:", hasSelectedPendingRecords);
   console.log("Selected Records Count:", selectedRecords.length);
+  console.log("Records With Pending Status:", mintingRecords.filter(r => r.status === 'pending').map(r => r.id));
+  console.log("Selected Record Status:", selectedRecords.map(id => {
+    const record = mintingRecords.find(r => r.id === id);
+    return record ? { id, status: record.status } : { id, status: 'not found' };
+  }));
   
   return (
     <div className="container mx-auto py-8 px-4">
@@ -669,6 +821,7 @@ const Index: React.FC = () => {
                     onClick={processManualInput} 
                     className="mt-2 w-full"
                     variant="secondary"
+                    disabled={!currentProject.id}
                   >
                     Process Recipients
                   </Button>
@@ -746,8 +899,8 @@ const Index: React.FC = () => {
                         <Button
                           variant="default"
                           size="sm"
-                          // FIX: This was preventing the button from being clickable
-                          // We're fixing it to enable the button whenever ANY records are selected
+                          // FIX: This condition was preventing the button from being clickable
+                          // We're now just checking if there are selected records, loading state, and project config
                           disabled={selectedRecords.length === 0 || isLoading || !currentProject.apiKey || !currentProject.templateId}
                           onClick={mintSelected}
                           className="flex-1"
