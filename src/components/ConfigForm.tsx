@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -225,7 +226,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!currentProject.name || !currentProject.api_key || !currentProject.template_id || !currentProject.collection_id) {
+    if (!currentProject.name || !currentProject.api_key || !currentProject.template_id) {
       toast({
         title: "Missing information",
         description: "Please fill in all project details",
@@ -233,6 +234,9 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
       });
       return;
     }
+    
+    // Make sure collection_id is set, defaulting to template_id if not provided
+    const collection_id = currentProject.collection_id || currentProject.template_id;
     
     // Do not allow submission if template validation failed
     if (templateValidationStatus === 'invalid') {
@@ -254,7 +258,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
             name: currentProject.name,
             api_key: currentProject.api_key,
             template_id: currentProject.template_id,
-            collection_id: currentProject.collection_id,
+            collection_id: collection_id,
             blockchain: currentProject.blockchain
           })
           .eq('id', currentProject.id)
@@ -267,7 +271,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
             name: currentProject.name,
             api_key: currentProject.api_key,
             template_id: currentProject.template_id,
-            collection_id: currentProject.collection_id,
+            collection_id: collection_id,
             blockchain: currentProject.blockchain
           })
           .select();
@@ -279,7 +283,14 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ onConfigSaved, onProjectChange 
       
       if (data) {
         const savedProject = data[0];
-        onConfigSaved(savedProject);
+        
+        // Ensure the saved project has collection_id set
+        const projectWithCollection = {
+          ...savedProject,
+          collection_id: savedProject.collection_id || savedProject.template_id
+        };
+        
+        onConfigSaved(projectWithCollection);
         
         // Refresh projects list
         fetchProjects();
