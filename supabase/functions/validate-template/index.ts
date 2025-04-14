@@ -3,7 +3,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key, accept',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
@@ -19,76 +19,223 @@ serve(async (req) => {
     const url = new URL(req.url);
     const templateId = url.searchParams.get('templateId');
     const apiKey = url.searchParams.get('apiKey');
+    const collectionId = url.searchParams.get('collectionId');
 
-    if (!templateId || !apiKey) {
-      console.error('[Validate Template] Missing required parameters - templateId or apiKey');
+    if ((!templateId && !collectionId) || !apiKey) {
+      console.error('[Validate Template] Missing required parameters - templateId/collectionId or apiKey');
       return new Response(
-        JSON.stringify({ error: true, message: "Missing required parameters: templateId and apiKey" }),
+        JSON.stringify({ error: true, message: "Missing required parameters: templateId/collectionId and apiKey" }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    console.log(`[Validate Template] Validating template: ${templateId}`);
+    // First, attempt to validate the collection ID
+    if (collectionId) {
+      console.log(`[Validate Template] Validating collection: ${collectionId}`);
+      
+      // This is the URL for the Crossmint Collections API (staging)
+      const collectionUrl = `https://staging.crossmint.com/api/2022-06-09/collections/${collectionId}`;
+      console.log(`[Validate Template] Calling Crossmint API for collection: ${collectionUrl}`);
 
-    // Now trying first to validate the template as a Collection
-    // This is the URL for the Crossmint Collections API
-    const collectionUrl = `https://staging.crossmint.com/api/2022-06-09/collections/${templateId}`;
-    console.log(`[Validate Template] Calling Crossmint API: ${collectionUrl}`);
+      const collectionResponse = await fetch(
+        collectionUrl,
+        {
+          method: 'GET',
+          headers: {
+            'x-api-key': apiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        }
+      );
 
-    const response = await fetch(
-      collectionUrl,
-      {
-        method: 'GET',
-        headers: {
-          'x-api-key': apiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+      console.log(`[Validate Template] Collection API response status: ${collectionResponse.status}`);
+      
+      const collectionData = await collectionResponse.json();
+      console.log(`[Validate Template] Collection response data:`, collectionData);
+
+      if (collectionResponse.status === 200) {
+        console.log(`[Validate Template] Collection validation successful for ${collectionId}`);
+        
+        // Collection is valid, now try to get template details if template ID was provided
+        if (templateId) {
+          // Now validate the template within this collection
+          console.log(`[Validate Template] Validating template: ${templateId} in collection: ${collectionId}`);
+          
+          // Fetch templates for this collection
+          const templatesUrl = `https://staging.crossmint.com/api/2022-06-09/collections/${collectionId}/templates`;
+          console.log(`[Validate Template] Calling Crossmint API for templates: ${templatesUrl}`);
+          
+          const templatesResponse = await fetch(
+            templatesUrl,
+            {
+              method: 'GET',
+              headers: {
+                'x-api-key': apiKey,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              }
+            }
+          );
+          
+          if (templatesResponse.ok) {
+            const templatesData = await templatesResponse.json();
+            console.log(`[Validate Template] Templates response:`, templatesData);
+            
+            // Find the specific template in the collection
+            const templateData = templatesData.find(t => t.id === templateId);
+            
+            if (templateData) {
+              console.log(`[Validate Template] Found template: ${templateId}`);
+              
+              // Format a response combining collection and template data
+              const formattedResponse = {
+                id: templateData.id,
+                name: templateData.metadata?.name || collectionData.metadata?.name,
+                description: templateData.metadata?.description || collectionData.metadata?.description,
+                metadata: {
+                  image: templateData.metadata?.imageUrl || templateData.metadata?.image
+                },
+                chain: collectionData.onChain?.chain,
+                readableChain: getReadableChainName(collectionData.onChain?.chain),
+                compatibleWallets: getCompatibleWallets(collectionData.onChain?.chain)
+              };
+              
+              return new Response(
+                JSON.stringify(formattedResponse),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            } else {
+              // Template not found in this collection
+              console.log(`[Validate Template] Template ${templateId} not found in collection ${collectionId}`);
+              
+              // Return the collection info without template-specific details
+              const formattedResponse = {
+                id: collectionId,
+                name: collectionData.metadata?.name,
+                description: collectionData.metadata?.description,
+                metadata: {
+                  image: collectionData.metadata?.imageUrl || collectionData.metadata?.image
+                },
+                chain: collectionData.onChain?.chain,
+                readableChain: getReadableChainName(collectionData.onChain?.chain),
+                compatibleWallets: getCompatibleWallets(collectionData.onChain?.chain),
+                templateNotFound: true
+              };
+              
+              return new Response(
+                JSON.stringify(formattedResponse),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+          } else {
+            // Could not get templates, just return collection info
+            console.log(`[Validate Template] Could not fetch templates for collection ${collectionId}`);
+            
+            const formattedResponse = {
+              id: collectionId,
+              name: collectionData.metadata?.name,
+              description: collectionData.metadata?.description,
+              metadata: {
+                image: collectionData.metadata?.imageUrl || collectionData.metadata?.image
+              },
+              chain: collectionData.onChain?.chain,
+              readableChain: getReadableChainName(collectionData.onChain?.chain),
+              compatibleWallets: getCompatibleWallets(collectionData.onChain?.chain)
+            };
+            
+            return new Response(
+              JSON.stringify(formattedResponse),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        } else {
+          // No template ID provided, just return collection info
+          const formattedResponse = {
+            id: collectionId,
+            name: collectionData.metadata?.name,
+            description: collectionData.metadata?.description,
+            metadata: {
+              image: collectionData.metadata?.imageUrl || collectionData.metadata?.image
+            },
+            chain: collectionData.onChain?.chain,
+            readableChain: getReadableChainName(collectionData.onChain?.chain),
+            compatibleWallets: getCompatibleWallets(collectionData.onChain?.chain)
+          };
+          
+          return new Response(
+            JSON.stringify(formattedResponse),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
       }
-    );
-
-    console.log(`[Validate Template] Crossmint API response status: ${response.status}`);
-    
-    const responseData = await response.json();
-    console.log(`[Validate Template] Response data:`, responseData);
-
-    if (response.status === 200) {
-      console.log(`[Validate Template] Template validation successful for ${templateId}`);
-      
-      // Extract useful information from the response
-      const templateName = responseData.metadata?.name || 'not specified';
-      const templateBlockchain = responseData.onChain?.chain || 'not specified';
-      
-      console.log(`[Validate Template] Template blockchain: ${templateBlockchain}`);
-      console.log(`[Validate Template] Template name: ${templateName}`);
-      
-      // Format a nice response with all the needed info
-      const formattedResponse = {
-        id: responseData.id,
-        name: responseData.metadata?.name,
-        description: responseData.metadata?.description,
-        metadata: {
-          image: responseData.metadata?.imageUrl || responseData.metadata?.image
-        },
-        chain: responseData.onChain?.chain,
-        readableChain: getReadableChainName(responseData.onChain?.chain),
-        compatibleWallets: getCompatibleWallets(responseData.onChain?.chain)
-      };
-      
-      return new Response(
-        JSON.stringify(formattedResponse),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    } else {
-      // If we couldn't validate as a collection, we should try to validate as a template
-      console.error(`[Validate Template] Template validation failed for ${templateId}: ${JSON.stringify(responseData)}`);
-      
-      // For now, just return the error
-      return new Response(
-        JSON.stringify(responseData),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: response.status }
-      );
     }
+    
+    // If we reach here, either collection validation failed or only template ID was provided
+    if (templateId) {
+      console.log(`[Validate Template] Validating template directly: ${templateId}`);
+      
+      // Try to get the template directly (this is a fallback and might not work depending on Crossmint's API)
+      const templateUrl = `https://staging.crossmint.com/api/2022-06-09/templates/${templateId}`;
+      console.log(`[Validate Template] Calling Crossmint API for template: ${templateUrl}`);
+      
+      const templateResponse = await fetch(
+        templateUrl,
+        {
+          method: 'GET',
+          headers: {
+            'x-api-key': apiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        }
+      );
+      
+      if (templateResponse.ok) {
+        const templateData = await templateResponse.json();
+        console.log(`[Validate Template] Template response:`, templateData);
+        
+        const formattedResponse = {
+          id: templateData.id,
+          name: templateData.metadata?.name,
+          description: templateData.metadata?.description,
+          metadata: {
+            image: templateData.metadata?.imageUrl || templateData.metadata?.image
+          },
+          chain: templateData.onChain?.chain || "unknown",
+          readableChain: getReadableChainName(templateData.onChain?.chain),
+          compatibleWallets: getCompatibleWallets(templateData.onChain?.chain)
+        };
+        
+        return new Response(
+          JSON.stringify(formattedResponse),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        // Template validation failed
+        console.error(`[Validate Template] Template validation failed for ${templateId}`);
+        const errorData = await templateResponse.json();
+        
+        return new Response(
+          JSON.stringify({ 
+            error: true, 
+            message: "Template ID no encontrado. Verifica que estés usando el entorno correcto.",
+            details: errorData
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+        );
+      }
+    }
+    
+    // If we reach here, both collection and template validation failed
+    return new Response(
+      JSON.stringify({ 
+        error: true, 
+        message: "No se pudo validar el Collection ID ni el Template ID. Verifica tus credenciales y que estés usando el entorno correcto."
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+    );
+    
   } catch (error) {
     console.error(`[Validate Template] Error: ${error.message}`);
     return new Response(
