@@ -1,3 +1,4 @@
+
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MintingRecord } from "@/components/MintingTable";
@@ -44,6 +45,8 @@ export class MintingService {
         apiKeyProvided: !!project.apiKey,
       });
       
+      // Make the request to the edge function
+      console.log(`[MintingService] Sending request to edge function now...`);
       const { data, error } = await supabase.functions.invoke(
         'crossmint-nft',
         {
@@ -74,22 +77,62 @@ export class MintingService {
         } catch (e) {
           console.log("[MintingService] Could not parse detailed error:", e);
         }
+        
+        // Update record in database if it has an ID
+        if (record.id && !record.id.startsWith('temp-')) {
+          try {
+            await supabase
+              .from('nft_mints')
+              .update({
+                status: 'failed',
+                error_message: detailedError,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', record.id);
+            console.log(`[MintingService] Updated record in database with failed status and error: ${detailedError}`);
+          } catch (dbError) {
+            console.error(`[MintingService] Error updating database record:`, dbError);
+          }
+        }
+        
+        // Update the local state via callback
+        updateRecordStatus(record.id || '', 'failed', detailedError);
+        
+        return { 
+          recipient: record.recipient, 
+          success: false,
+          error: { message: detailedError }
+        };
       }
       
+      // Check if the data indicates success or failure
       const success = !error && data?.success;
       const errorMessage = error?.message || data?.error?.message || "Unknown error";
+      
+      // Log detailed information
+      if (success) {
+        console.log(`[MintingService] Successfully minted NFT for ${record.recipient} on ${project.blockchain}`);
+      } else {
+        console.error(`[MintingService] Failed to mint NFT for ${record.recipient} on ${project.blockchain}:`, 
+          data?.error || errorMessage);
+      }
       
       // Update record in database if it has an ID
       if (record.id && !record.id.startsWith('temp-')) {
         console.log(`[MintingService] Updating record in database with status: ${success ? 'minted' : 'failed'}`);
-        await supabase
-          .from('nft_mints')
-          .update({
-            status: success ? 'minted' : 'failed',
-            error_message: !success ? errorMessage : null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', record.id);
+        try {
+          await supabase
+            .from('nft_mints')
+            .update({
+              status: success ? 'minted' : 'failed',
+              error_message: !success ? errorMessage : null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', record.id);
+          console.log(`[MintingService] Database update completed successfully`);
+        } catch (dbError) {
+          console.error(`[MintingService] Error updating database record:`, dbError);
+        }
       }
       
       // Update the local state via callback
@@ -109,14 +152,19 @@ export class MintingService {
       
       // Update record in database if it has an ID
       if (record.id && !record.id.startsWith('temp-')) {
-        await supabase
-          .from('nft_mints')
-          .update({
-            status: 'failed',
-            error_message: error.message || 'Network error',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', record.id);
+        try {
+          await supabase
+            .from('nft_mints')
+            .update({
+              status: 'failed',
+              error_message: error.message || 'Network error',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', record.id);
+          console.log(`[MintingService] Updated record in database after unhandled error`);
+        } catch (dbError) {
+          console.error(`[MintingService] Error updating database record:`, dbError);
+        }
       }
       
       // Update the local state via callback
@@ -247,6 +295,8 @@ export class MintingService {
     });
     
     try {
+      console.log(`[MintingService] Retrying mint for ${record.recipient} on ${project.blockchain}`);
+      
       // Actualizar estado a pending
       await supabase
         .from('nft_mints')

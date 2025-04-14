@@ -161,23 +161,29 @@ serve(async (req) => {
       }
     }
 
-    // Format recipient according to blockchain - FIXED FORMATTING FOR CHILIZ
+    // Format recipient according to blockchain
     let recipientFormat;
-    if (recipient.includes("@")) {
-      // For email recipients
+    
+    if (isEmailRecipient) {
+      // For email recipients - always use the email:address:blockchain format
       recipientFormat = `email:${recipient}:${blockchain}`;
-    } else if (blockchain === "chiliz") {
-      // Special handling for Chiliz blockchain - don't include blockchain in the format
-      recipientFormat = recipient;
+      console.log(`[Edge Function] Formatted email recipient: ${recipientFormat}`);
     } else {
-      // For other blockchains
-      recipientFormat = `${recipient}:${blockchain}`;
+      // For wallet addresses - blockchain specific formatting
+      if (blockchain === "chiliz") {
+        // For Chiliz, just use the wallet address without blockchain suffix
+        recipientFormat = recipient;
+        console.log(`[Edge Function] Using plain address for Chiliz: ${recipientFormat}`);
+      } else {
+        // For other blockchains (Ethereum, Polygon, Solana), append the blockchain
+        recipientFormat = `${recipient}:${blockchain}`;
+        console.log(`[Edge Function] Formatted wallet for ${blockchain}: ${recipientFormat}`);
+      }
     }
-      
-    console.log(`[Edge Function] Formatted recipient for ${blockchain}: ${recipientFormat}`);
 
     console.log(`[Edge Function] Making request to Crossmint API for blockchain: ${blockchain}`);
     console.log(`[Edge Function] Using template ID: ${templateId}`);
+    console.log(`[Edge Function] Final recipient format: ${recipientFormat}`);
     
     // Use Crossmint staging API
     const crossmintEndpoint = "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts";
@@ -185,6 +191,11 @@ serve(async (req) => {
     
     let response;
     try {
+      console.log(`[Edge Function] Sending request to Crossmint with payload:`, {
+        recipient: recipientFormat,
+        templateId: templateId
+      });
+      
       response = await fetch(
         crossmintEndpoint,
         {
@@ -202,6 +213,7 @@ serve(async (req) => {
       );
       
       console.log("[Edge Function] Crossmint API request sent successfully");
+      console.log("[Edge Function] Response status:", response.status, response.statusText);
     } catch (e) {
       console.error("[Edge Function] Failed to make request to Crossmint API:", e);
       
@@ -237,6 +249,7 @@ serve(async (req) => {
     let data;
     try {
       data = await response.json();
+      console.log("[Edge Function] Response body:", JSON.stringify(data));
     } catch (e) {
       console.error("[Edge Function] Failed to parse Crossmint API response:", e);
       data = { error: "Failed to parse response" };
@@ -289,8 +302,9 @@ serve(async (req) => {
         }
       );
     } else {
-      const errorMessage = data.message || data.error?.message || "Unknown error from Crossmint API";
+      const errorMessage = data.message || (data.error?.message || data.error) || "Unknown error from Crossmint API";
       console.error(`[Edge Function] Minting failed for ${recipient} on ${blockchain}. Error:`, errorMessage);
+      console.error("[Edge Function] Full error response:", JSON.stringify(data));
       
       // Update record as failed with detailed error message
       try {
