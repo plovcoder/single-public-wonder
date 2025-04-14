@@ -608,10 +608,10 @@ const Index: React.FC = () => {
   // Check if there are pending records that can be selected
   const hasPendingRecords = mintingStats.pending > 0;
   
-  // Check if there are selected records that can be minted
+  // Fix: Check if there are selected records that can be minted
   const hasSelectedPendingRecords = selectedRecords.length > 0 && 
-    mintingRecords.some(r => 
-      selectedRecords.includes(r.id || '') && r.status === 'pending'
+    mintingRecords.some(record => 
+      selectedRecords.includes(record.id || '') && record.status === 'pending'
     );
   
   // Check if there are any selected records
