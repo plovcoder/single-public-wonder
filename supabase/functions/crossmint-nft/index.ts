@@ -8,13 +8,11 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Parse request body
     const requestBody = await req.json();
     const { recipient, apiKey, templateId } = requestBody;
     
@@ -35,18 +33,19 @@ serve(async (req) => {
       );
     }
 
+    // Format the recipient address for Chiliz blockchain
+    const formattedRecipient = recipient.startsWith('0x') ? `chiliz:${recipient}` : recipient;
+    
     // Crossmint staging API
     const crossmintEndpoint = "https://staging.crossmint.com/api/2022-06-09/collections/default/nfts";
     
-    // The minimum required payload
     const mintPayload = {
-      recipient,
+      recipient: formattedRecipient,
       templateId
     };
     
     console.log(`[Edge Function] Sending request to Crossmint:`, mintPayload);
     
-    // Send payload to Crossmint API
     const response = await fetch(
       crossmintEndpoint,
       {
@@ -60,11 +59,9 @@ serve(async (req) => {
       }
     );
     
-    // Get the response as text first for better logging
     const responseText = await response.text();
     console.log(`[Edge Function] Crossmint response (${response.status}):`, responseText);
     
-    // Parse the response if it's JSON
     let responseData;
     try {
       responseData = JSON.parse(responseText);
@@ -72,7 +69,6 @@ serve(async (req) => {
       responseData = { text: responseText };
     }
     
-    // Return the response from Crossmint
     return new Response(
       JSON.stringify(responseData),
       { 
