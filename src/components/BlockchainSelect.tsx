@@ -24,7 +24,7 @@ const BlockchainSelect: React.FC<BlockchainSelectProps> = ({
         onValueChange={onChange}
         disabled={disabled}
       >
-        <SelectTrigger id="blockchain">
+        <SelectTrigger id="blockchain" className={detectedBlockchain ? 'border-green-500' : ''}>
           <SelectValue placeholder="Select blockchain" />
         </SelectTrigger>
         <SelectContent>
@@ -35,8 +35,8 @@ const BlockchainSelect: React.FC<BlockchainSelectProps> = ({
         </SelectContent>
       </Select>
       {detectedBlockchain && (
-        <p className="text-xs text-green-600 mt-1">
-          Blockchain detectado automáticamente del template
+        <p className="text-sm text-green-600 mt-1">
+          Blockchain automatically detected from template
         </p>
       )}
     </div>
