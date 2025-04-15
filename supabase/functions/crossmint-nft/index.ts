@@ -55,10 +55,10 @@ serve(async (req) => {
     
     console.log(`[Edge Function] Using formatted recipient: ${formattedRecipient}`);
     
-    // SIEMPRE usa el endpoint de staging para asegurarnos
     const crossmintEndpoint = `https://staging.crossmint.com/api/2022-06-09/collections/${collectionId}/nfts`;
     
     console.log(`[Edge Function] Using endpoint: ${crossmintEndpoint}`);
+    console.log(`[Edge Function] Using blockchain: ${blockchain}`);
     
     // Create the mint payload
     const mintPayload: Record<string, string> = {
@@ -69,11 +69,9 @@ serve(async (req) => {
     if (templateId) {
       mintPayload.templateId = templateId;
       console.log(`[Edge Function] Including templateId in payload: ${templateId}`);
-    } else {
-      console.warn("[Edge Function] Warning: No templateId provided. This may cause an error with Crossmint API.");
     }
     
-    console.log(`[Edge Function] Sending request to Crossmint:`, mintPayload);
+    console.log(`[Edge Function] Final payload being sent to Crossmint:`, mintPayload);
     
     const response = await fetch(
       crossmintEndpoint,
@@ -89,19 +87,35 @@ serve(async (req) => {
     );
     
     const responseText = await response.text();
-    console.log(`[Edge Function] Crossmint response (${response.status}):`, responseText);
+    console.log(`[Edge Function] Crossmint raw response (${response.status}):`, responseText);
     
     let responseData;
     try {
       responseData = JSON.parse(responseText);
+      console.log(`[Edge Function] Parsed response data:`, responseData);
     } catch (e) {
+      console.error(`[Edge Function] Failed to parse response:`, e);
       responseData = { text: responseText };
+    }
+    
+    if (!response.ok) {
+      console.error(`[Edge Function] Crossmint API error (${response.status}):`, responseData);
+      return new Response(
+        JSON.stringify({ 
+          error: responseData.message || "Error from Crossmint API",
+          details: responseData
+        }),
+        { 
+          status: response.status, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
     }
     
     return new Response(
       JSON.stringify(responseData),
       { 
-        status: response.status, 
+        status: 200, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
