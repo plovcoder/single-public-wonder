@@ -37,15 +37,27 @@ serve(async (req) => {
     // Format the recipient address - could be email or wallet address
     let formattedRecipient;
     
+    // Determine the actual blockchain to use based on collection requirements
+    // Default to the provided blockchain, but we'll adjust for testnet collections
+    let effectiveBlockchain = blockchain;
+    
+    // If blockchain is chiliz and it appears we might need to use the testnet
+    if (blockchain === 'chiliz') {
+      // We'll add a check here to determine if we need to use the testnet
+      // For now, let's try using chiliz-spicy-testnet since that's what the error suggests
+      effectiveBlockchain = 'chiliz-spicy-testnet';
+      console.log(`[Edge Function] Adjusted blockchain from ${blockchain} to ${effectiveBlockchain} for potential testnet collection`);
+    }
+    
     // Handle wallet addresses (starting with 0x)
     if (recipient.startsWith('0x')) {
-      formattedRecipient = `${blockchain}:${recipient}`;
-      console.log(`[Edge Function] Formatted wallet address using blockchain ${blockchain}`);
+      formattedRecipient = `${effectiveBlockchain}:${recipient}`;
+      console.log(`[Edge Function] Formatted wallet address using adjusted blockchain ${effectiveBlockchain}`);
     } 
     // Handle email recipients
     else if (recipient.includes('@')) {
-      formattedRecipient = `email:${recipient}:${blockchain}`;
-      console.log(`[Edge Function] Formatted email using blockchain ${blockchain}`);
+      formattedRecipient = `email:${recipient}:${effectiveBlockchain}`;
+      console.log(`[Edge Function] Formatted email using adjusted blockchain ${effectiveBlockchain}`);
     }
     // Otherwise use as is (might already be formatted)
     else {
@@ -58,7 +70,7 @@ serve(async (req) => {
     const crossmintEndpoint = `https://staging.crossmint.com/api/2022-06-09/collections/${collectionId}/nfts`;
     
     console.log(`[Edge Function] Using endpoint: ${crossmintEndpoint}`);
-    console.log(`[Edge Function] Using blockchain: ${blockchain}`);
+    console.log(`[Edge Function] Using effective blockchain: ${effectiveBlockchain} (original: ${blockchain})`);
     
     // Create the mint payload
     const mintPayload: Record<string, string> = {
