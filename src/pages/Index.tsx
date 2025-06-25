@@ -1,380 +1,74 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "@/hooks/use-toast";
-import MintingTable, { MintingRecord } from "@/components/MintingTable";
-import ConfigForm from "@/components/ConfigForm";
-import { supabase } from "@/integrations/supabase/client";
-import RecipientInput from "@/components/RecipientInput";
-import MintingStats from "@/components/MintingStats";
-import { MintingService } from "@/services/MintingService";
-import { MintingProject, Project } from "@/types/project";
+import React from "react";
+
+const mockDrops = [
+  {
+    id: 188540,
+    title: "asdasd",
+    date: "Apr 30, 2025 (UTC+02:00)",
+    galleryUrl: "#",
+    familyUrl: "#",
+    momentsUrl: "#",
+    image: "https://assets.poap.xyz/dia-de-entrenamiento-2025-2025-logo-1709832226752.png",
+    distribution: null
+  },
+  {
+    id: 188488,
+    title: "Socios - Take The Pitch 2025 (TESTING)",
+    date: "Apr 9, 2025 - Dec 31, 2025 (UTC+02:00)",
+    location: "ATM Training Camp, Spain",
+    galleryUrl: "#",
+    familyUrl: "#",
+    momentsUrl: "#",
+    image: "https://assets.poap.xyz/dia-de-entrenamiento-2025-2025-logo-1709832226752.png",
+    distribution: { delivery: 2, secret: 10, extra: 2 }
+  }
+];
 
 const Index: React.FC = () => {
-  const [mintingRecords, setMintingRecords] = useState<MintingRecord[]>([]);
-  const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
-  const [currentProject, setCurrentProject] = useState<MintingProject>({
-    apiKey: '',
-    templateId: '',
-    collectionId: '',
-    blockchain: 'chiliz'
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // Load records from Supabase on initial page load
-  useEffect(() => {
-    const loadInitialRecords = async () => {
-      // Get the most recent project
-      const { data: projectData, error: projectError } = await supabase
-        .from('nft_projects')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1);
-      
-      if (projectError) {
-        console.error('Error fetching most recent project:', projectError);
-        return;
-      }
-      
-      if (projectData && projectData.length > 0) {
-        const project = projectData[0];
-        setCurrentProject({
-          id: project.id,
-          apiKey: project.api_key,
-          templateId: project.template_id,
-          collectionId: project.collection_id || project.template_id, // Fallback for backwards compatibility
-          blockchain: project.blockchain
-        });
-        
-        // Load minting records for this project
-        const mintRecords = await MintingService.loadMintingRecordsForProject(project.id);
-        setMintingRecords(mintRecords);
-      }
-    };
-    
-    loadInitialRecords();
-  }, []);
-  
-  const handleProjectChange = async (projectId?: string) => {
-    if (!projectId) return;
-    
-    try {
-      // Fetch project details and update current project
-      const { data, error } = await supabase
-        .from('nft_projects')
-        .select('*')
-        .eq('id', projectId)
-        .single();
-      
-      if (error) {
-        console.error('Error fetching project details:', error);
-        return;
-      }
-      
-      if (data) {
-        setCurrentProject({
-          id: data.id,
-          apiKey: data.api_key,
-          templateId: data.template_id,
-          collectionId: data.collection_id || data.template_id, // Fallback for backwards compatibility
-          blockchain: data.blockchain
-        });
-        
-        // Fetch minting records for this project
-        const mintRecords = await MintingService.loadMintingRecordsForProject(data.id);
-        setMintingRecords(mintRecords);
-        setSelectedRecords([]); // Clear selections
-      }
-    } catch (error) {
-      console.error('Error loading project:', error);
-    }
-  };
-  
-  const handleConfigSaved = (project: Project) => {
-    setCurrentProject({
-      id: project.id,
-      apiKey: project.api_key,
-      templateId: project.template_id,
-      collectionId: project.collection_id,
-      blockchain: project.blockchain
-    });
-  };
-  
-  const handleRecipientsLoaded = (newRecords: MintingRecord[]) => {
-    setMintingRecords(prev => [...newRecords, ...prev]);
-    setSelectedRecords([]); // Clear selections
-  };
-  
-  // Handle selection of a record
-  const handleSelectRecord = (recordId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedRecords(prev => [...prev, recordId]);
-    } else {
-      setSelectedRecords(prev => prev.filter(id => id !== recordId));
-    }
-  };
-  
-  // Handle select all pending records
-  const handleSelectAllPending = () => {
-    const pendingRecordIds = mintingRecords
-      .filter(record => record.status === 'pending')
-      .map(record => record.id || '');
-    
-    // Filter out any undefined IDs
-    const validIds = pendingRecordIds.filter(id => id !== '');
-    
-    setSelectedRecords(validIds);
-    
-    toast({
-      title: "Selected all pending",
-      description: `Selected ${validIds.length} pending records`
-    });
-  };
-  
-  // Update a record's status
-  const updateRecordStatus = (recordId: string, status: 'pending' | 'minted' | 'failed', errorMessage?: string) => {
-    setMintingRecords(prevRecords => {
-      return prevRecords.map(r => {
-        if (r.id === recordId) {
-          return {
-            ...r,
-            status,
-            error_message: errorMessage,
-            updated_at: new Date().toISOString()
-          };
-        }
-        return r;
-      });
-    });
-  };
-  
-  // Handle mint selected
-  const mintSelected = async () => {
-    if (selectedRecords.length === 0) {
-      toast({
-        title: "No records selected",
-        description: "Please select at least one record to mint",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    if (!currentProject.apiKey || !currentProject.templateId || !currentProject.collectionId) {
-      toast({
-        title: "Missing configuration",
-        description: "Please select a project and configure its details",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setIsLoading(true);
-    
-    try {
-      // Get the selected records
-      const selectedMintingRecords = mintingRecords.filter(record => 
-        selectedRecords.includes(record.id || '')
-      );
-      
-      await MintingService.processMultipleMints(
-        selectedMintingRecords,
-        currentProject,
-        updateRecordStatus
-      );
-      
-      // Clear selections after minting
-      setSelectedRecords([]);
-    } catch (error: any) {
-      console.error('Error in minting process:', error);
-      toast({
-        title: "Error in minting process",
-        description: error.message || "There was an error processing your request",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Function to retry all failed mints
-  const retryFailedMints = async () => {
-    const failedRecords = mintingRecords.filter(record => record.status === 'failed');
-    
-    if (failedRecords.length === 0) {
-      toast({
-        title: "No failed mints",
-        description: "There are no failed mints to retry",
-      });
-      return;
-    }
-    
-    toast({
-      title: "Retrying failed mints",
-      description: `Preparing to retry ${failedRecords.length} failed mints`
-    });
-    
-    // Update records to pending for retry
-    for (const record of failedRecords) {
-      await supabase
-        .from('nft_mints')
-        .update({ 
-          status: 'pending', 
-          error_message: null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', record.id);
-      
-      // Update UI
-      updateRecordStatus(record.id || '', 'pending');
-    }
-    
-    // Set selected records to the failed ones and mint them
-    const failedRecordIds = failedRecords
-      .map(record => record.id || '')
-      .filter(id => id !== '');
-    
-    setSelectedRecords(failedRecordIds);
-    await mintSelected();
-  };
-  
-  // Individual retry function
-  const handleRetryMint = async (record: MintingRecord) => {
-    setIsLoading(true);
-    try {
-      await MintingService.retryMint(record, currentProject, updateRecordStatus);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  // Handle deleting individual record
-  const handleDeleteRecord = async (record: MintingRecord) => {
-    const success = await MintingService.deleteRecord(record);
-    if (success) {
-      // Update local state to remove the record
-      setMintingRecords(prevRecords => 
-        prevRecords.filter(r => r !== record)
-      );
-      
-      // Remove from selected records if it was selected
-      setSelectedRecords(prev => 
-        prev.filter(id => id !== record.id)
-      );
-    }
-  };
-  
-  // Handle deleting multiple selected records
-  const handleDeleteSelected = async () => {
-    if (selectedRecords.length === 0) {
-      toast({
-        title: "No records selected",
-        description: "Please select at least one record to delete",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const success = await MintingService.deleteMultipleRecords(selectedRecords);
-    
-    if (success) {
-      // Update local state to remove the records
-      setMintingRecords(prevRecords => 
-        prevRecords.filter(record => {
-          const recordId = record.id || '';
-          return !selectedRecords.includes(recordId);
-        })
-      );
-      
-      // Clear selected records
-      setSelectedRecords([]);
-    }
-  };
-  
-  // Calculate minting stats
-  const mintingStats = {
-    total: mintingRecords.length,
-    minted: mintingRecords.filter(r => r.status === 'minted').length,
-    pending: mintingRecords.filter(r => r.status === 'pending').length,
-    failed: mintingRecords.filter(r => r.status === 'failed').length
-  };
-  
-  // Check if there are pending records that can be selected
-  const hasPendingRecords = mintingStats.pending > 0;
-  
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Crossmint NFT Sender</h1>
-          <p className="text-gray-500 mt-2">
-            Upload a list or paste addresses to mint and send NFTs in batch
-          </p>
+    <div className="min-h-screen bg-gray-50 py-10 px-4 flex flex-col items-center">
+      <div className="w-full max-w-3xl">
+        <div className="mb-8 flex items-center justify-between">
+          <span className="text-violet-700 font-semibold">✨ You have <b>2 drops</b></span>
+          <div className="flex gap-4">
+            <button className="text-violet-700 font-medium hover:underline">Import Drop</button>
+            <button className="bg-violet-500 hover:bg-violet-600 text-white font-bold py-2 px-4 rounded-lg shadow flex items-center gap-2">
+              <span className="text-xl font-bold">+</span> Make a POAP
+            </button>
+          </div>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-8">
-            <ConfigForm 
-              onConfigSaved={handleConfigSaved}
-              onProjectChange={handleProjectChange}
-            />
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Enter Recipients</CardTitle>
-                <CardDescription>
-                  Enter email addresses or wallet addresses below, or upload a file
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <RecipientInput 
-                  currentProject={currentProject}
-                  onRecipientsLoaded={handleRecipientsLoaded}
-                  failedMintCount={mintingStats.failed}
-                  isLoading={isLoading}
-                  onRetryFailedMints={retryFailedMints}
-                />
-              </CardContent>
-            </Card>
-          </div>
-          
-          <div>
-            <Card className="h-full">
-              <CardHeader>
-                <CardTitle>Minting Results</CardTitle>
-                <CardDescription>
-                  Status of your NFT minting operations for current project
-                </CardDescription>
-                {mintingRecords.length > 0 && (
-                  <MintingStats 
-                    stats={mintingStats}
-                    selectedRecords={selectedRecords}
-                    hasPendingRecords={hasPendingRecords}
-                    isLoading={isLoading}
-                    currentProject={currentProject}
-                    onSelectAllPending={handleSelectAllPending}
-                    onMintSelected={mintSelected}
-                    onDeleteSelected={handleDeleteSelected}
-                  />
-                )}
-              </CardHeader>
-              <CardContent>
-                {mintingRecords.length > 0 ? (
-                  <MintingTable 
-                    records={mintingRecords}
-                    onRetry={handleRetryMint}
-                    selectedRecords={selectedRecords}
-                    onSelectRecord={handleSelectRecord}
-                    onDeleteRecord={handleDeleteRecord}
-                    onSelectAllPending={handleSelectAllPending}
-                  />
-                ) : (
-                  <div className="text-center p-8 text-gray-500">
-                    <p>No minting operations yet</p>
-                    <p className="text-sm mt-2">Enter recipients and use the mint controls to start</p>
+        <div className="space-y-8">
+          {mockDrops.map((drop) => (
+            <div key={drop.id} className="bg-white rounded-2xl shadow p-6 flex gap-6 items-center border border-violet-100">
+              <img src={drop.image} alt={drop.title} className="w-24 h-24 rounded-full border-4 border-violet-200 object-cover" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 text-xs text-gray-400 mb-1">
+                  <span>ID {drop.id}</span>
+                  <a href={drop.galleryUrl} className="text-violet-600 font-bold hover:underline">Gallery</a>
+                  <a href={drop.familyUrl} className="text-violet-600 font-bold hover:underline">Family</a>
+                  <a href={drop.momentsUrl} className="text-violet-600 font-bold hover:underline">Moments</a>
+                </div>
+                <div className="text-xl font-bold text-gray-800 mb-1">{drop.title}</div>
+                <div className="flex items-center gap-2 text-gray-500 mb-2">
+                  <span className="flex items-center gap-1"><svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="3" y="10" width="18" height="11" rx="2" stroke="#7c3aed" strokeWidth="2"/></svg></span>
+                  {drop.date}
+                </div>
+                {drop.location && <div className="flex items-center gap-2 text-gray-500 mb-2"><svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 21s-6-5.686-6-10A6 6 0 0 1 18 11c0 4.314-6 10-6 10z" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="11" r="2" stroke="#7c3aed" strokeWidth="2"/></svg>{drop.location}</div>}
+                {drop.distribution ? (
+                  <div className="flex gap-2 mt-2">
+                    <span className="bg-violet-50 text-violet-700 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">Delivery <b>{drop.distribution.delivery}</b></span>
+                    <span className="bg-orange-50 text-orange-700 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">Secret <b>{drop.distribution.secret}</b></span>
+                    <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">+{drop.distribution.extra}</span>
                   </div>
+                ) : (
+                  <div className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs font-semibold inline-block mt-2">No distribution added yet</div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+              <button className="ml-auto text-violet-500 hover:text-violet-700">
+                <svg width="32" height="32" fill="none" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     </div>

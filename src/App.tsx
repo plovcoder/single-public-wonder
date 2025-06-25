@@ -1,27 +1,50 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import React, { useState } from "react";
+import Layout from "@/components/layout/Layout";
+import LandingPage from "./pages/LandingPage";
+import NftSenderDashboard from "@/components/dashboard/NftSenderDashboard";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import ConfigForm from "@/components/ConfigForm";
+import AppLayout from "@/components/layout/AppLayout";
 
-const queryClient = new QueryClient();
+const App = () => {
+  const [isConnected, setIsConnected] = useState(false);
+  const [role, setRole] = useState("admin");
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
+  return (
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        {isConnected ? (
+          <AppLayout role={role} setRole={setRole}>
+            <Routes>
+              <Route path="/dashboard" element={<NftSenderDashboard />} />
+              <Route path="/home" element={<Index />} />
+              <Route
+                path="/create"
+                element={
+                  <div className="max-w-xl mx-auto py-10">
+                    <ConfigForm
+                      onConfigSaved={() => {}}
+                      onProjectChange={() => {}}
+                    />
+                  </div>
+                }
+              />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AppLayout>
+        ) : (
+          <LandingPage onConnect={() => setIsConnected(true)} />
+        )}
       </BrowserRouter>
     </TooltipProvider>
-  </QueryClientProvider>
-);
+  );
+};
 
 export default App;
